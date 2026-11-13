@@ -44,6 +44,8 @@ jobs:
       STORAGE_UPLOAD_PATH: ./storage/uploads
       MAX_FILE_SIZE_MB: 25
       DEFAULT_USER_QUOTA_MB: 100
+      ADMIN_EMAIL: admin@virtuallab.edu
+      ADMIN_PASSWORD: AdminSecurePassword123!
 
     steps:
       - name: Checkout Source Code
@@ -70,6 +72,10 @@ jobs:
       - name: Apply Database Migrations
         working-directory: ./backend
         run: npx prisma migrate deploy
+
+      - name: Seed Initial Test Database Records
+        working-directory: ./backend
+        run: npx prisma db seed
 
       - name: Run Backend Automated Test Suite (127 Tests)
         working-directory: ./backend
