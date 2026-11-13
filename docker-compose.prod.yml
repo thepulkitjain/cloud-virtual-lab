@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: cvl_prod_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
+      POSTGRES_DB: ${POSTGRES_DB:-cloud_virtual_lab}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cloud_virtual_lab"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cvl_network
+
+  # 2. Node.js & Express API Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cvl_prod_backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      CLIENT_URL: ${CLIENT_URL:-http://localhost}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/${POSTGRES_DB:-cloud_virtual_lab}?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      STORAGE_ENCRYPTION_SECRET: ${STORAGE_ENCRYPTION_SECRET}
+      STORAGE_UPLOAD_PATH: /app/storage/uploads
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-25}
+      DEFAULT_USER_QUOTA_MB: ${DEFAULT_USER_QUOTA_MB:-100}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@virtuallab.edu}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-AdminSecurePassword123!}
+    volumes:
+      # Persistent Encrypted Storage Volume
+      - encrypted_storage:/app/storage/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cvl_network
+
+  # 3. React SPA Frontend & Nginx Gateway
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cvl_prod_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - cvl_network
+
+volumes:
+  postgres_data:
+    driver: local
+  encrypted_storage:
+    driver: local
+
+networks:
+  cvl_network:
+    driver: bridge

@@ -1,0 +1,229 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum LabCategory {
+  LINUX
+  NETWORKING
+  PROGRAMMING
+  DATABASE
+}
+
+enum LabDifficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum SubmissionStatus {
+  PASSED
+  FAILED
+  PENDING
+}
+
+enum FileCategory {
+  DOCUMENT
+  IMAGE
+  CODE
+  ARCHIVE
+  PDF
+  OTHER
+}
+
+model User {
+  id                String               @id @default(uuid())
+  email             String               @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  role              Role                 @default(STUDENT)
+  status            UserStatus           @default(ACTIVE)
+  storageQuotaBytes BigInt               @default(104857600) // Default 100 MB (100 * 1024 * 1024)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  profile           UserProfile?
+  folders           StorageFolder[]
+  files             StoredFile[]
+  labSessions       LabSession[]
+  submissions       ExerciseSubmission[]
+  activities        ActivityLog[]
+  auditLogs         AuditLog[]           @relation("AdminAuditLogs")
+
+  @@index([email])
+  @@index([role])
+}
+
+model UserProfile {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentId   String?   @unique
+  department  String?
+  semester    Int?
+  avatarUrl   String?
+  bio         String?
+  lastLoginAt DateTime?
+}
+
+model Lab {
+  id               String        @id @default(uuid())
+  title            String
+  slug             String        @unique
+  description      String
+  category         LabCategory
+  difficulty       LabDifficulty @default(BEGINNER)
+  estimatedMinutes Int           @default(30)
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  exercises        LabExercise[]
+  sessions         LabSession[]
+
+  @@index([category])
+}
+
+model LabExercise {
+  id              String               @id @default(uuid())
+  labId           String
+  lab             Lab                  @relation(fields: [labId], references: [id], onDelete: Cascade)
+  orderIndex      Int
+  title           String
+  instruction     String
+  hint            String?
+  expectedCommand String?
+  expectedOutput  String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  submissions     ExerciseSubmission[]
+
+  @@unique([labId, orderIndex])
+}
+
+model LabSession {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  labId     String
+  lab       Lab           @relation(fields: [labId], references: [id], onDelete: Cascade)
+  status    SessionStatus @default(IN_PROGRESS)
+  startedAt DateTime      @default(now())
+  endedAt   DateTime?
+  score     Int           @default(0)
+
+  submissions ExerciseSubmission[]
+  activities  ActivityLog[]
+
+  @@index([userId])
+  @@index([labId])
+}
+
+model ExerciseSubmission {
+  id           String           @id @default(uuid())
+  sessionId    String
+  session      LabSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exercise     LabExercise      @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  commandInput String
+  outputResult String
+  status       SubmissionStatus @default(PENDING)
+  submittedAt  DateTime         @default(now())
+
+  @@index([sessionId])
+  @@index([exerciseId])
+}
+
+model StorageFolder {
+  id        String          @id @default(uuid())
+  name      String
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    StorageFolder?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  StorageFolder[] @relation("FolderHierarchy")
+  files     StoredFile[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([userId, parentId, name])
+  @@index([userId])
+}
+
+model StoredFile {
+  id             String         @id @default(uuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folderId       String?
+  folder         StorageFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  originalName   String
+  storedName     String         @unique
+  mimeType       String
+  fileCategory   FileCategory   @default(OTHER)
+  sizeBytes      BigInt
+  encryptionIv   String
+  authTag        String
+  checksumSha256 String
+  isPublic       Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([folderId])
+}
+
+model ActivityLog {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?
+  session   LabSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  action    String
+  details   String?
+  ipAddress String?
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  adminId      String
+  admin        User     @relation("AdminAuditLogs", fields: [adminId], references: [id], onDelete: Cascade)
+  targetEntity String
+  targetId     String?
+  action       String
+  previousVal  String?
+  newVal       String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([action])
+}

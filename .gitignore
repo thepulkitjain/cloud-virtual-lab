@@ -1,0 +1,71 @@
+# ==============================================================================
+# Cloud Virtual Lab and Secure Storage Management System - Git Ignore Rules
+# ==============================================================================
+
+# 1. Dependency Directories
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# 2. Production & Compiler Build Outputs
+dist/
+**/dist/
+build/
+**/build/
+out/
+.next/
+
+# 3. Environment & Secret Credentials
+# Strictly exclude all environment files containing live credentials
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+# Explicitly preserve example documentation templates
+!**/.env.example
+
+# 4. Encrypted Cloud Storage & Uploads
+# Preserve directory structure with .gitkeep but NEVER commit uploaded files or blobs
+storage/uploads/*
+!storage/uploads/.gitkeep
+*.enc
+**/*.enc
+
+# 5. Database Dumps & Snapshots
+*.dump
+*.sql.gz
+*.backup
+
+# 6. Operational & Debug Logs
+logs/
+**/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 7. Testing, Coverage & Cache
+coverage/
+**/coverage/
+.vitest/
+.nyc_output/
+.eslintcache
+.stylelintcache
+.cache/
+
+# 8. Operating System & IDE Artifacts
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
