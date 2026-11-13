@@ -148,3 +148,69 @@ To verify that files on the server are truly encrypted:
    Get-Content .\<filename>.enc -Raw
    ```
 4. **Result:** The contents are scrambled binary ciphertext. No plaintext, headers, or readable student data exist on disk.
+
+---
+
+## 8. Pluggable Storage Provider Architecture (Phase 9B)
+
+The system abstracts physical and cloud persistence behind a unified `IStorageProvider` interface. Ciphertext is generated **before** invoking the storage provider, ensuring that plaintext **never** leaves the server's memory or enters cloud buckets.
+
+```mermaid
+flowchart TD
+    MulterBuffer["Plaintext Upload (Multer Memory Storage)"] --> CryptoEngine["AES-256-GCM Encryption Engine"]
+    CryptoEngine --> CiphertextBuffer["Encrypted Ciphertext Buffer<br/>(12-byte IV + 16-byte Auth Tag + Checksum)"]
+
+    CiphertextBuffer --> StorageFactory{"Storage Driver Selection<br/>STORAGE_DRIVER=local | s3"}
+
+    StorageFactory -->|STORAGE_DRIVER=local| LocalProvider["LocalStorageProvider<br/>Writes to storage/uploads/*.enc"]
+    StorageFactory -->|STORAGE_DRIVER=s3| S3Provider["S3StorageProvider<br/>AWS SDK v3 (PutObjectCommand)"]
+
+    LocalProvider --> LocalDisk[("Host Server SSD / Persistent Volume")]
+    S3Provider --> S3Bucket[("AWS S3 / Cloudflare R2 / MinIO Bucket")]
+```
+
+### Supported Storage Drivers
+
+| Driver | `STORAGE_DRIVER` | Underlying Backend | Ideal Use Case |
+| :--- | :---: | :--- | :--- |
+| **Local Disk** *(Default)* | `local` | Host filesystem / Docker volume (`storage/uploads`) | Local development, single-server VPS, Docker Compose. |
+| **AWS S3** | `s3` | Amazon Simple Storage Service | Enterprise AWS cloud deployments. |
+| **Cloudflare R2** | `s3` | Cloudflare R2 Object Storage (Zero egress fees) | Cost-effective serverless and global deployments. |
+| **MinIO** | `s3` | Self-hosted S3-compatible object store | On-premise institutional data centers. |
+
+### S3-Compatible Cloud Provider Configurations
+
+#### A. AWS S3 Configuration
+```env
+STORAGE_DRIVER=s3
+S3_BUCKET=cloud-virtual-lab-vault
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+S3_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+S3_FORCE_PATH_STYLE=false
+```
+
+#### B. Cloudflare R2 Configuration
+Cloudflare R2 provides full S3 compatibility with zero egress bandwidth charges:
+```env
+STORAGE_DRIVER=s3
+S3_BUCKET=cvl-secure-storage
+S3_REGION=auto
+S3_ENDPOINT=https://<your-cloudflare-account-id>.r2.cloudflarestorage.com
+S3_ACCESS_KEY_ID=<your-r2-access-key-id>
+S3_SECRET_ACCESS_KEY=<your-r2-secret-access-key>
+S3_FORCE_PATH_STYLE=false
+```
+
+#### C. MinIO (Self-Hosted Object Storage) Configuration
+```env
+STORAGE_DRIVER=s3
+S3_BUCKET=virtual-lab-encrypted-vault
+S3_REGION=us-east-1
+S3_ENDPOINT=http://minio:9000
+S3_ACCESS_KEY_ID=minioadmin
+S3_SECRET_ACCESS_KEY=minioadmin
+S3_FORCE_PATH_STYLE=true
+```
+
+> **Security Invariant:** Regardless of whether files reside on local disk or an S3 bucket, files in storage are always strictly AES-256-GCM ciphertext. The master encryption key never leaves the Express application server.

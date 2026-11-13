@@ -5,7 +5,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20.x_LTS-green.svg?logo=node.js)](https://nodejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18.6-336791.svg?logo=postgresql)](https://www.postgresql.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-5.22-2d3748.svg?logo=prisma)](https://www.prisma.io/)
-[![Vitest](https://img.shields.io/badge/Tests-127%2F127_Passing-brightgreen.svg?logo=vitest)](https://vitest.dev/)
+[![Vitest](https://img.shields.io/badge/Tests-142%2F142_Passing-brightgreen.svg?logo=vitest)](https://vitest.dev/)
 [![Security Hardened](https://img.shields.io/badge/Security-AES--256--GCM_Authenticated-purple.svg)](docs/SECURITY.md)
 [![License](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
@@ -45,6 +45,9 @@ A centralized, browser-accessible environment that provides:
 - **Zero Plaintext on Disk:** Every uploaded file is encrypted in memory using **AES-256-GCM** before touching physical disk storage.
 - **Unique IVs & Auth Tags:** Every file generates a unique 96-bit cryptographic Initialization Vector (IV), a 128-bit authentication tag for tamper resistance, and a SHA-256 integrity checksum.
 - **Atomic Storage Quotas:** Per-user quota limits (default: 100 MB) enforced via atomic PostgreSQL row-level locks (`SELECT FOR UPDATE`) to prevent race conditions.
+- **Pluggable Storage Drivers (Phase 9B):** Seamless support for multiple storage backends via unified `IStorageProvider` interface:
+  - `LocalStorageProvider`: Host server filesystem or persistent Docker volumes.
+  - `S3StorageProvider`: Cloud-native object storage supporting **AWS S3**, **Cloudflare R2** (zero-egress fees), and **MinIO**.
 - **File Management:** Hierarchical folder organization, safe rename, move, in-browser previews, and permanent deletion with instant disk unlinking.
 - **Anti-Malware & Path Traversal Guard:** Strict denylist blocks executable programs and scripts (`.exe`, `.bat`, `.sh`, `.ps1`, `.msi`, `.dll`, `.iso`). Filenames are normalized across cross-platform path separators.
 
@@ -103,6 +106,7 @@ flowchart TD
 | **Backend API** | Node.js 20+, Express 4.19, TypeScript, Zod, Multer, Helmet, CORS | RESTful API & Sandboxed Simulators |
 | **Database & ORM** | PostgreSQL 18.6, Prisma ORM 5.22 | Relational Persistence & Type-Safe Queries |
 | **Security & Crypto** | Node.js Built-in `crypto` (AES-256-GCM), Bcrypt.js (12 rounds), JWT | Authenticated at-rest encryption & auth |
+| **Cloud Storage** | AWS SDK v3 (`@aws-sdk/client-s3`) | S3-Compatible Storage (AWS S3, Cloudflare R2, MinIO) |
 | **Testing** | Vitest 1.6, Supertest | Unit, Integration & Security Test Suites |
 | **Containers & Gateway**| Docker, Docker Compose, Nginx Alpine | Containerized Deployment & Reverse Proxy |
 
@@ -250,7 +254,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## 🧪 Testing & Quality Assurance
 
-The project includes **127 automated regression, integration, and security tests** across 6 suites:
+The project includes **142 automated regression, integration, and security tests** across 7 suites:
 
 ```bash
 cd backend
@@ -259,16 +263,17 @@ npm test
 
 ### Test Suite Execution Summary
 ```
- ✓ src/tests/security.test.ts  (43 tests) - Authentication, Multi-tenant, Storage Tampering & Isolation
- ✓ src/tests/lab.test.ts       (24 tests) - Linux, Networking, Programming & SQL Execution Engines
- ✓ src/tests/storage.test.ts   (27 tests) - AES-256-GCM Encrypted Uploads, Quota & Integrity Checks
- ✓ src/tests/admin.test.ts     (15 tests) - RBAC Enforcement, User Statuses & Audit Logging
- ✓ src/tests/auth.test.ts      (17 tests) - Bcrypt Hashing, JWT Cookies, Password Lifecycles
- ✓ src/tests/health.test.ts    (1 test)   - Infrastructure Health & Heartbeat
+ ✓ src/tests/security.test.ts          (43 tests) - Authentication, Multi-tenant, Storage Tampering & Isolation
+ ✓ src/tests/lab.test.ts               (24 tests) - Linux, Networking, Programming & SQL Execution Engines
+ ✓ src/tests/storage.test.ts           (27 tests) - AES-256-GCM Encrypted Uploads, Quota & Integrity Checks
+ ✓ src/tests/admin.test.ts             (15 tests) - RBAC Enforcement, User Statuses & Audit Logging
+ ✓ src/tests/storage-provider.test.ts  (15 tests) - Pluggable Storage Drivers (Local, S3 Mock, Encryption Checks)
+ ✓ src/tests/auth.test.ts              (17 tests) - Bcrypt Hashing, JWT Cookies, Password Lifecycles
+ ✓ src/tests/health.test.ts            (1 test)   - Infrastructure Health & Heartbeat
 
- Test Files  6 passed (6)
-      Tests  127 passed (127)
-   Duration  24.13s
+ Test Files  7 passed (7)
+      Tests  142 passed (142)
+   Duration  22.61s
 ```
 
 ### Production Build Validation

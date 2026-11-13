@@ -13,8 +13,13 @@ export interface AppConfig {
   jwtExpiresIn: string;
   cookieSameSite: string;
   cookieSecure: boolean;
+  storageDriver: string;
   storageEncryptionSecret: string;
   storageUploadPath: string;
+  s3Bucket?: string;
+  s3Region?: string;
+  s3Endpoint?: string;
+  s3ForcePathStyle?: boolean;
   maxFileSizeMb: number;
   defaultUserQuotaMb: number;
   adminEmail: string;
@@ -45,6 +50,11 @@ export const validateEnvironment = (): AppConfig => {
     errors.push('STORAGE_ENCRYPTION_SECRET is required in production mode.');
   }
 
+  const storageDriver = (process.env.STORAGE_DRIVER || 'local').toLowerCase().trim();
+  if (storageDriver === 's3' && !process.env.S3_BUCKET && isProduction) {
+    errors.push('S3_BUCKET is required when STORAGE_DRIVER is set to "s3" in production.');
+  }
+
   if (errors.length > 0) {
     console.error('❌ Critical Environment Configuration Error(s):');
     errors.forEach((err) => console.error(`   - ${err}`));
@@ -62,9 +72,14 @@ export const validateEnvironment = (): AppConfig => {
     cookieSecure: process.env.COOKIE_SECURE !== undefined
       ? process.env.COOKIE_SECURE === 'true'
       : isProduction,
+    storageDriver: storageDriver,
     storageEncryptionSecret:
       encryptionSecret || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
     storageUploadPath: process.env.STORAGE_UPLOAD_PATH || '../storage/uploads',
+    s3Bucket: process.env.S3_BUCKET,
+    s3Region: process.env.S3_REGION || 'us-east-1',
+    s3Endpoint: process.env.S3_ENDPOINT,
+    s3ForcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
     maxFileSizeMb: parseInt(process.env.MAX_FILE_SIZE_MB || '25', 10),
     defaultUserQuotaMb: parseInt(process.env.DEFAULT_USER_QUOTA_MB || '100', 10),
     adminEmail: process.env.ADMIN_EMAIL || 'admin@virtuallab.edu',

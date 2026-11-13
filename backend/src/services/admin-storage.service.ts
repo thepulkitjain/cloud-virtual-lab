@@ -3,6 +3,7 @@ import path from 'path';
 import { prisma } from '../config/database';
 import { AppError } from '../types';
 import { getStorageUploadDirectory } from './storage.service';
+import { getStorageProvider } from './storage';
 import { FileCategory } from '@prisma/client';
 
 export class AdminStorageService {
@@ -339,16 +340,9 @@ export class AdminStorageService {
       throw new AppError('File not found.', 404);
     }
 
-    // Unlink physical ciphertext file
-    const uploadDir = getStorageUploadDirectory();
-    const filePath = path.join(uploadDir, file.storedName);
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch (err) {
-        console.error('Failed to unlink file on admin delete:', err);
-      }
-    }
+    // Remove physical ciphertext file via active storage provider
+    const storageProvider = getStorageProvider();
+    await storageProvider.deleteFile(file.storedName);
 
     // Delete DB record and log AuditLog in a transaction
     await prisma.$transaction([

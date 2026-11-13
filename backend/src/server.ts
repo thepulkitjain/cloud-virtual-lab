@@ -9,6 +9,7 @@ const server = app.listen(PORT, () => {
   console.log(`🚀 Virtual Lab & Secure Storage API running on http://localhost:${PORT}`);
   console.log(`📡 Environment: ${envConfig.nodeEnv}`);
   console.log(`🌐 Allowed Client URL: ${envConfig.clientUrl}`);
+  console.log(`📦 Active Storage Driver: ${envConfig.storageDriver}`);
   console.log(`📡 Health check accessible at: http://localhost:${PORT}/api/health`);
 });
 

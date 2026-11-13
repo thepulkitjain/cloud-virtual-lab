@@ -41,6 +41,7 @@ jobs:
       JWT_SECRET: ci_test_jwt_secret_min_32_characters_long_for_security_testing
       JWT_EXPIRES_IN: 1d
       STORAGE_ENCRYPTION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      STORAGE_DRIVER: local
       STORAGE_UPLOAD_PATH: ./storage/uploads
       MAX_FILE_SIZE_MB: 25
       DEFAULT_USER_QUOTA_MB: 100

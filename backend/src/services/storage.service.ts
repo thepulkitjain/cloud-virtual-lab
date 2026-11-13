@@ -6,6 +6,7 @@ import { prisma } from '../config/database';
 import { AppError } from '../types';
 import { encryptFileBuffer, decryptFileBuffer } from '../utils/crypto.util';
 import { resolveFileCategory } from '../utils/file-category.util';
+import { getStorageProvider } from './storage';
 
 export const getStorageUploadDirectory = (): string => {
   const configuredPath = process.env.STORAGE_UPLOAD_PATH || '../storage/uploads';
@@ -93,7 +94,7 @@ export class StorageService {
     }
 
     const fileSize = BigInt(file.size);
-    let writtenFilePath: string | null = null;
+    let writtenStoredName: string | null = null;
 
     try {
       // 2. Atomic Quota Verification inside a Transaction with Row-Level Locking
@@ -129,13 +130,15 @@ export class StorageService {
         // 3. Encrypt file in memory using AES-256-GCM
         const { encryptedBuffer, ivHex, authTagHex, checksumSha256 } = encryptFileBuffer(file.buffer);
 
-        // 4. Generate random stored filename (UUIDv4) and write ciphertext to disk
+        // 4. Generate random stored filename (UUIDv4) and write ciphertext via storage provider
         const storedName = `${uuidv4()}.enc`;
-        const uploadDir = getStorageUploadDirectory();
-        const filePath = path.join(uploadDir, storedName);
-
-        fs.writeFileSync(filePath, encryptedBuffer);
-        writtenFilePath = filePath; // Mark for rollback if DB fails
+        const storageProvider = getStorageProvider();
+        await storageProvider.saveFile(storedName, encryptedBuffer, {
+          mimeType: file.mimetype,
+          originalName: file.originalname,
+          sizeBytes: fileSize,
+        });
+        writtenStoredName = storedName; // Mark for rollback if DB fails
 
         // 5. Categorize file based on extension and MIME type
         const fileCategory = resolveFileCategory(file.originalname, file.mimetype);
@@ -186,10 +189,11 @@ export class StorageService {
         updatedAt: storedFile.updatedAt,
       };
     } catch (error) {
-      // Safe Cleanup: If transaction failed after writing ciphertext, remove orphaned file from disk
-      if (writtenFilePath && fs.existsSync(writtenFilePath)) {
+      // Safe Cleanup: If transaction failed after writing ciphertext, remove orphaned file from storage provider
+      if (writtenStoredName) {
         try {
-          fs.unlinkSync(writtenFilePath);
+          const storageProvider = getStorageProvider();
+          await storageProvider.deleteFile(writtenStoredName);
         } catch (unlinkErr) {
           console.error('Failed to clean up file after failed upload transaction:', unlinkErr);
         }
@@ -301,14 +305,8 @@ export class StorageService {
       throw new AppError('Forbidden: You are not authorized to download this file.', 403);
     }
 
-    const uploadDir = getStorageUploadDirectory();
-    const filePath = path.join(uploadDir, file.storedName);
-
-    if (!fs.existsSync(filePath)) {
-      throw new AppError('Encrypted file payload missing from storage volume.', 404);
-    }
-
-    const encryptedBuffer = fs.readFileSync(filePath);
+    const storageProvider = getStorageProvider();
+    const encryptedBuffer = await storageProvider.getFile(file.storedName);
 
     // Decrypt and verify authenticated GCM tag
     const decryptedBuffer = decryptFileBuffer(
@@ -414,17 +412,9 @@ export class StorageService {
       throw new AppError('Forbidden: You are not authorized to delete this file.', 403);
     }
 
-    // 1. Remove encrypted file blob from disk
-    const uploadDir = getStorageUploadDirectory();
-    const filePath = path.join(uploadDir, file.storedName);
-
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch (err) {
-        console.error('Failed to unlink encrypted file:', err);
-      }
-    }
+    // 1. Remove encrypted file blob via active storage provider
+    const storageProvider = getStorageProvider();
+    await storageProvider.deleteFile(file.storedName);
 
     // 2. Remove record from database & log activity
     await prisma.$transaction([
