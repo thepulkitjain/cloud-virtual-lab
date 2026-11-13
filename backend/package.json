@@ -9,6 +9,8 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:status": "prisma migrate status",
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:verify": "ts-node prisma/verify_seed.ts",
     "prisma:studio": "prisma studio",

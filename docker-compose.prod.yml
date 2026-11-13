@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d cloud_virtual_lab"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-cloud_virtual_lab}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -34,6 +34,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/${POSTGRES_DB:-cloud_virtual_lab}?schema=public
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       STORAGE_ENCRYPTION_SECRET: ${STORAGE_ENCRYPTION_SECRET}
       STORAGE_UPLOAD_PATH: /app/storage/uploads
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-25}
@@ -46,6 +48,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - cvl_network
 
@@ -59,7 +67,13 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
       - cvl_network
 

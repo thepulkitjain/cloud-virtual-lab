@@ -34,9 +34,13 @@ storage/uploads/*
 **/*.enc
 
 # 5. Database Dumps & Snapshots
+backups/
+**/backups/
 *.dump
 *.sql.gz
 *.backup
+*.sql
+!backend/prisma/migrations/**/*.sql
 
 # 6. Operational & Debug Logs
 logs/

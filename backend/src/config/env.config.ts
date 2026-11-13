@@ -11,6 +11,8 @@ export interface AppConfig {
   databaseUrl: string;
   jwtSecret: string;
   jwtExpiresIn: string;
+  cookieSameSite: string;
+  cookieSecure: boolean;
   storageEncryptionSecret: string;
   storageUploadPath: string;
   maxFileSizeMb: number;
@@ -56,6 +58,10 @@ export const validateEnvironment = (): AppConfig => {
     databaseUrl: databaseUrl || '',
     jwtSecret: jwtSecret || 'super_secret_jwt_signing_key_change_in_production_min32chars',
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1d',
+    cookieSameSite: process.env.COOKIE_SAME_SITE || (isProduction ? 'strict' : 'lax'),
+    cookieSecure: process.env.COOKIE_SECURE !== undefined
+      ? process.env.COOKIE_SECURE === 'true'
+      : isProduction,
     storageEncryptionSecret:
       encryptionSecret || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
     storageUploadPath: process.env.STORAGE_UPLOAD_PATH || '../storage/uploads',

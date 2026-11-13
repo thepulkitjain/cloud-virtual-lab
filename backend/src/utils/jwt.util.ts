@@ -27,15 +27,29 @@ export const verifyToken = (token: string): JwtTokenPayload | null => {
 };
 
 /**
+ * Helper to determine cookie security and SameSite configuration for production/development
+ */
+const getCookieOptions = () => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const configuredSameSite = process.env.COOKIE_SAME_SITE as 'none' | 'lax' | 'strict' | undefined;
+  const sameSite: 'none' | 'lax' | 'strict' = configuredSameSite || (isProduction ? 'strict' : 'lax');
+  const secure = process.env.COOKIE_SECURE !== undefined
+    ? process.env.COOKIE_SECURE === 'true'
+    : (isProduction || sameSite === 'none');
+
+  return { sameSite, secure };
+};
+
+/**
  * Attaches the JWT token to an HTTP-only cookie with strict security options
  */
 export const setAuthCookie = (res: Response, token: string): void => {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const { sameSite, secure } = getCookieOptions();
 
   res.cookie(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: isProduction, // HTTPS in production
-    sameSite: isProduction ? 'strict' : 'lax',
+    secure,
+    sameSite,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     path: '/',
   });
@@ -45,12 +59,12 @@ export const setAuthCookie = (res: Response, token: string): void => {
  * Clears the authentication cookie on logout
  */
 export const clearAuthCookie = (res: Response): void => {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const { sameSite, secure } = getCookieOptions();
 
   res.clearCookie(AUTH_COOKIE_NAME, {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? 'strict' : 'lax',
+    secure,
+    sameSite,
     path: '/',
   });
 };

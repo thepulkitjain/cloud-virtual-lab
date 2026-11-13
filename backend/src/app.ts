@@ -12,13 +12,21 @@ import { AppError } from './types';
 export const createApp = (): Application => {
   const app = express();
 
+  // Enable trust proxy for secure cookies and accurate client IP when behind reverse proxies (Nginx, Cloudflare, etc.)
+  app.set('trust proxy', 1);
+
   // 1. Security Headers
   app.use(helmet());
 
   // 2. Cross-Origin Resource Sharing (CORS) with Credentials
+  const rawClientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const allowedOrigins = rawClientUrl.includes(',')
+    ? rawClientUrl.split(',').map((url) => url.trim())
+    : rawClientUrl;
+
   app.use(
     cors({
-      origin: process.env.CLIENT_URL || 'http://localhost:5173',
+      origin: allowedOrigins,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
