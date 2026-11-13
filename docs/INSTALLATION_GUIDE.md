@@ -20,15 +20,17 @@ This guide walks through configuring, installing dependencies, provisioning Post
 
 ---
 
-## 2. Quick Setup with Docker (PostgreSQL)
+## 2. Quick Setup with Docker (PostgreSQL & Redis)
 
-If you have Docker and Docker Compose installed, start PostgreSQL with a single command:
+If you have Docker and Docker Compose installed, start PostgreSQL and Redis with a single command:
 ```bash
 docker compose up -d
 ```
-This spins up PostgreSQL on port `5432` with volume persistence in `postgres_data`.
+This spins up:
+- PostgreSQL on port `5432` with volume persistence in `postgres_data`.
+- Redis 7 on port `6379` with volume persistence in `redis_data` and healthcheck monitoring.
 
-To verify PostgreSQL is running:
+To verify services are running:
 ```bash
 docker ps
 ```
@@ -88,6 +90,13 @@ STORAGE_ENCRYPTION_SECRET=paste_your_generated_64_char_secret_here
 STORAGE_UPLOAD_PATH=../storage/uploads
 MAX_FILE_SIZE_MB=25
 DEFAULT_USER_QUOTA_MB=100
+
+# Redis Distributed Security & Rate Limiting
+REDIS_ENABLED=true
+REDIS_HOST=localhost
+REDIS_PORT=6379
+# REDIS_PASSWORD=your_redis_password
+REDIS_REQUIRED=false
 
 # Seed Administrator Credentials
 ADMIN_EMAIL=admin@virtuallab.edu

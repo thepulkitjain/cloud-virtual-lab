@@ -23,6 +23,14 @@ export interface AppConfig {
   maxFileSizeMb: number;
   defaultUserQuotaMb: number;
   adminEmail: string;
+  redisEnabled: boolean;
+  redisUrl?: string;
+  redisHost: string;
+  redisPort: number;
+  redisPassword?: string;
+  redisDb: number;
+  redisKeyPrefix: string;
+  redisRequired: boolean;
 }
 
 /**
@@ -83,6 +91,14 @@ export const validateEnvironment = (): AppConfig => {
     maxFileSizeMb: parseInt(process.env.MAX_FILE_SIZE_MB || '25', 10),
     defaultUserQuotaMb: parseInt(process.env.DEFAULT_USER_QUOTA_MB || '100', 10),
     adminEmail: process.env.ADMIN_EMAIL || 'admin@virtuallab.edu',
+    redisEnabled: process.env.REDIS_ENABLED !== 'false',
+    redisUrl: process.env.REDIS_URL,
+    redisHost: process.env.REDIS_HOST || 'localhost',
+    redisPort: parseInt(process.env.REDIS_PORT || '6379', 10),
+    redisPassword: process.env.REDIS_PASSWORD || undefined,
+    redisDb: parseInt(process.env.REDIS_DB || '0', 10),
+    redisKeyPrefix: process.env.REDIS_KEY_PREFIX || 'cvl:',
+    redisRequired: process.env.REDIS_REQUIRED === 'true',
   };
 };
 

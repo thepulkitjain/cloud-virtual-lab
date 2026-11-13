@@ -4,6 +4,9 @@ export interface JwtTokenPayload {
   userId: string;
   email: string;
   role: Role;
+  iat?: number;
+  exp?: number;
+  jti?: string;
 }
 
 export interface AuthUser {

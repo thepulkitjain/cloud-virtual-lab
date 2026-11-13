@@ -48,9 +48,10 @@ flowchart TD
         DbSim["SQL Database Simulator (In-Memory PostgreSQL Catalog)"]
     end
 
-    subgraph StorageTier["Persistence Tier"]
+    subgraph StorageTier["Persistence & Distributed State Tier"]
         PrismaORM["Prisma ORM 5.22 Client"]
-        PostgresDB[(PostgreSQL 18.6 Database)]
+        PostgresDB[(PostgreSQL Database)]
+        RedisCache[("Redis 7: Distributed Rate Limiting & Token Revocation")]
         EncryptedVolume[("Encrypted Blob Storage /storage/uploads/*.enc")]
     end
 
@@ -70,10 +71,13 @@ flowchart TD
     LabEngine --> ProgSim
     LabEngine --> DbSim
 
+    RateLimiter <-->|Atomic INCR / PEXPIRE| RedisCache
+    AuthModule <-->|Token Revocation & Check| RedisCache
     AuthModule --> PrismaORM
     StorageEngine --> PrismaORM
     StorageEngine --> EncryptedVolume
     AdminModule --> PrismaORM
+    AdminModule -.->|Revoke User Sessions| RedisCache
     LabEngine --> PrismaORM
     PrismaORM --> PostgresDB
 ```

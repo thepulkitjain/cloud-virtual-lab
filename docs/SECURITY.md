@@ -68,8 +68,15 @@ If even a single bit of the encrypted file on disk is corrupted, or if an attack
 The login endpoint returns a generic `"Invalid email or password."` (`HTTP 401`) whether the account exists or the password was incorrect, preventing attackers from harvesting valid institutional email addresses.
 
 ### 3.4 Rate Limiting & Brute-Force Defense
-- Public authentication routes (`/api/v1/auth/login`, `/api/v1/auth/register`) are guarded by `express-rate-limit`.
+- Public authentication routes (`/api/v1/auth/login`, `/api/v1/auth/register`) are guarded by `express-rate-limit` backed by a distributed Redis store (`ResilientRateLimitStore`).
 - Enforces a threshold of **20 attempts per 15-minute window** per IP address in production, returning `HTTP 429 Too Many Requests`.
+- In multi-instance or clustered deployments, rate-limit counters are shared globally across all backend nodes, preventing attackers from bypassing limits by spraying requests across load-balanced instances.
+
+### 3.5 Distributed JWT Revocation & Session Invalidation (Phase 9C)
+- **Zero-Trust Token Invalidation:** When a user logs out, their JWT token is hashed via SHA-256 and added to the Redis revocation store (`cvl:revoked_token:<hash>`) with a TTL matching the token's remaining lifetime.
+- **Admin Account Suspension Invalidation:** When an administrator suspends a student or user, `cvl:user_revoked:<userId>` is set with the current timestamp in Redis. All active tokens issued prior to that timestamp are immediately rejected with `HTTP 401 Unauthorized`.
+- **Automatic Memory Reclamation:** Redis keys expire automatically via native TTLs; no database bloat or unbounded cache growth occurs.
+- **Fail-Safe Resilience:** Includes a local in-memory fallback layer, ensuring that local development and testing environments maintain session invalidation guarantees even when Redis is offline.
 
 ---
 

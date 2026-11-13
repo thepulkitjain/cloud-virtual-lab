@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { UserStatus } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AUTH_COOKIE_NAME, verifyToken } from '../utils/jwt.util';
+import { tokenRevocationService } from '../services/redis/token-revocation.service';
 import { AppError, AuthUser } from '../types';
 
 export const authenticate = async (
@@ -27,7 +28,13 @@ export const authenticate = async (
       throw new AppError('Invalid or expired authentication session. Please log in again.', 401);
     }
 
-    // 3. Verify user in database
+    // 3. Verify token revocation status in distributed Redis store
+    const isRevoked = await tokenRevocationService.isTokenRevoked(token, payload);
+    if (isRevoked) {
+      throw new AppError('Authentication session has been revoked. Please log in again.', 401);
+    }
+
+    // 4. Verify user in database
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       select: {

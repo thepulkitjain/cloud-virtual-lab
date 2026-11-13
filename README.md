@@ -5,7 +5,8 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20.x_LTS-green.svg?logo=node.js)](https://nodejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18.6-336791.svg?logo=postgresql)](https://www.postgresql.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-5.22-2d3748.svg?logo=prisma)](https://www.prisma.io/)
-[![Vitest](https://img.shields.io/badge/Tests-142%2F142_Passing-brightgreen.svg?logo=vitest)](https://vitest.dev/)
+[![Redis](https://img.shields.io/badge/Redis-7.x_Distributed-red.svg?logo=redis)](https://redis.io/)
+[![Vitest](https://img.shields.io/badge/Tests-152%2F152_Passing-brightgreen.svg?logo=vitest)](https://vitest.dev/)
 [![Security Hardened](https://img.shields.io/badge/Security-AES--256--GCM_Authenticated-purple.svg)](docs/SECURITY.md)
 [![License](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
@@ -53,8 +54,9 @@ A centralized, browser-accessible environment that provides:
 
 ### 3. Authentication & Multi-Tenant Isolation
 - **HTTP-Only Cookie Sessions:** Strict SameSite JWT sessions immune to client-side XSS token theft.
+- **Distributed Token Revocation (Phase 9C):** Redis-backed session invalidation instantly revokes JWT sessions upon user logout or administrator suspension across all cluster instances.
+- **Distributed Rate Limiting (Phase 9C):** Redis-backed atomic rate limiter enforces cluster-wide brute-force throttling (`RateLimit-*` headers) with automatic local memory fallback if Redis is offline.
 - **Bcrypt Password Security:** Passwords salted and hashed with **12 rounds**; strict Zod complexity validation.
-- **Brute-Force Rate Limiting:** Sensitive endpoints protected by `express-rate-limit`.
 - **Multi-Tenant Isolation:** Complete data separation between students with strict 403 Forbidden enforcement.
 
 ### 4. Administrator Console & System Governance

@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/auth.service';
 import { sendResponse } from '../utils/apiResponse';
-import { setAuthCookie, clearAuthCookie } from '../utils/jwt.util';
+import { setAuthCookie, clearAuthCookie, AUTH_COOKIE_NAME } from '../utils/jwt.util';
+import { tokenRevocationService } from '../services/redis/token-revocation.service';
 
 export class AuthController {
   static async register(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -50,8 +51,18 @@ export class AuthController {
     }
   }
 
-  static async logout(_req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      // Extract token to invalidate session in distributed Redis store
+      let token = req.cookies?.[AUTH_COOKIE_NAME];
+      if (!token && req.headers.authorization?.startsWith('Bearer ')) {
+        token = req.headers.authorization.split(' ')[1];
+      }
+
+      if (token) {
+        await tokenRevocationService.revokeToken(token);
+      }
+
       clearAuthCookie(res);
 
       sendResponse({

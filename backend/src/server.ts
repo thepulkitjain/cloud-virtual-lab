@@ -1,15 +1,28 @@
 import { createApp } from './app';
 import envConfig from './config/env.config';
 import { prisma } from './config/database';
+import { redisService } from './services/redis/redis.service';
 
 const PORT = envConfig.port;
 const app = createApp();
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`🚀 Virtual Lab & Secure Storage API running on http://localhost:${PORT}`);
   console.log(`📡 Environment: ${envConfig.nodeEnv}`);
   console.log(`🌐 Allowed Client URL: ${envConfig.clientUrl}`);
   console.log(`📦 Active Storage Driver: ${envConfig.storageDriver}`);
+
+  if (envConfig.redisEnabled) {
+    try {
+      await redisService.connect();
+      console.log(`⚡ Distributed Security: Redis rate limiting and token revocation active`);
+    } catch (err: any) {
+      console.warn(`⚠️  Distributed Security: Redis offline (${err?.message || err}). Fallback active.`);
+    }
+  } else {
+    console.log(`ℹ️  Distributed Security: Redis disabled via configuration. In-memory fallback active.`);
+  }
+
   console.log(`📡 Health check accessible at: http://localhost:${PORT}/api/health`);
 });
 
@@ -18,11 +31,13 @@ const handleShutdown = async (signal: string) => {
   console.log(`\n🛑 Received ${signal}. Initiating graceful shutdown...`);
   server.close(async () => {
     try {
+      await redisService.disconnect();
+      console.log('✅ Redis connection closed cleanly.');
       await prisma.$disconnect();
       console.log('✅ PostgreSQL database connection closed cleanly.');
       process.exit(0);
     } catch (err) {
-      console.error('❌ Error during database disconnect:', err);
+      console.error('❌ Error during shutdown disconnect:', err);
       process.exit(1);
     }
   });

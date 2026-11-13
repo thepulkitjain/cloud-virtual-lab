@@ -8,6 +8,7 @@ import { authenticate } from './middleware/auth.middleware';
 import { requireRoles } from './middleware/role.middleware';
 import { Role } from '@prisma/client';
 import { AppError } from './types';
+import { redisService } from './services/redis/redis.service';
 
 export const createApp = (): Application => {
   const app = express();
@@ -38,12 +39,20 @@ export const createApp = (): Application => {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // 4. Base Health Check Endpoint
-  app.get('/api/health', (_req: Request, res: Response) => {
+  // 4. Base Health Check Endpoint (includes Redis distributed service status)
+  app.get('/api/health', async (_req: Request, res: Response) => {
+    const redisHealth = await redisService.getHealth();
+
     res.status(200).json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       service: 'Cloud Virtual Lab and Secure Storage Management System Backend',
+      redis: {
+        status: redisHealth.status,
+        connected: redisHealth.connected,
+        ...(redisHealth.latencyMs !== undefined && { latencyMs: redisHealth.latencyMs }),
+        ...(redisHealth.details && { details: redisHealth.details }),
+      },
     });
   });
 

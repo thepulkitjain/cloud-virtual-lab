@@ -1,6 +1,7 @@
 import { Role, UserStatus, LabCategory, SessionStatus, SubmissionStatus } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AppError } from '../types';
+import { tokenRevocationService } from './redis/token-revocation.service';
 
 export interface ListUsersOptions {
   search?: string;
@@ -481,6 +482,13 @@ export class AdminGovernanceService {
 
       return updated;
     });
+
+    // Invalidate all active distributed sessions when a user is suspended
+    if (newStatus === UserStatus.SUSPENDED) {
+      await tokenRevocationService.revokeAllUserTokens(targetUserId);
+    } else if (newStatus === UserStatus.ACTIVE) {
+      await tokenRevocationService.clearUserRevocation(targetUserId);
+    }
 
     return {
       user: updatedUser,

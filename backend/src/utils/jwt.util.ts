@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import { Response } from 'express';
 import { JwtTokenPayload } from '../types';
 
@@ -7,10 +8,14 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
 export const AUTH_COOKIE_NAME = 'token';
 
 /**
- * Signs a new JWT token with user id, email and role
+ * Signs a new JWT token with user id, email, role, and a unique jti identifier
  */
 export const signToken = (payload: JwtTokenPayload): string => {
-  return jwt.sign(payload, JWT_SECRET, {
+  const tokenPayload = {
+    ...payload,
+    jti: payload.jti || uuidv4(),
+  };
+  return jwt.sign(tokenPayload, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN as any,
   });
 };

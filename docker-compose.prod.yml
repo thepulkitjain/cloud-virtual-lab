@@ -20,7 +20,28 @@ services:
     networks:
       - cvl_network
 
-  # 2. Node.js & Express API Backend
+  # 2. Redis Distributed Cache & Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: cvl_prod_redis
+    restart: always
+    command: >
+      sh -c 'if [ -n "$REDIS_PASSWORD" ]; then
+        redis-server --requirepass "$REDIS_PASSWORD" --appendonly yes;
+      else
+        redis-server --appendonly yes;
+      fi'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-} ping || redis-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cvl_network
+
+  # 3. Node.js & Express API Backend
   backend:
     build:
       context: ./backend
@@ -49,11 +70,18 @@ services:
       DEFAULT_USER_QUOTA_MB: ${DEFAULT_USER_QUOTA_MB:-100}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@virtuallab.edu}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-AdminSecurePassword123!}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_REQUIRED: ${REDIS_REQUIRED:-true}
     volumes:
       # Persistent Encrypted Storage Volume
       - encrypted_storage:/app/storage/uploads
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1"]
@@ -64,7 +92,7 @@ services:
     networks:
       - cvl_network
 
-  # 3. React SPA Frontend & Nginx Gateway
+  # 4. React SPA Frontend & Nginx Gateway
   frontend:
     build:
       context: ./frontend
@@ -86,6 +114,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
     driver: local
   encrypted_storage:
     driver: local
