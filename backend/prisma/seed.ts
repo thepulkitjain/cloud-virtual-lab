@@ -12,7 +12,7 @@ async function main() {
   console.log('🌱 Starting database seed...');
 
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@virtuallab.edu';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'AdminSecurePassword123!';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@Lab2026!';
   const adminFirstName = process.env.ADMIN_FIRST_NAME || 'System';
   const adminLastName = process.env.ADMIN_LAST_NAME || 'Administrator';
 
@@ -23,6 +23,7 @@ async function main() {
   const adminUser = await prisma.user.upsert({
     where: { email: adminEmail },
     update: {
+      passwordHash,
       role: Role.ADMIN,
       status: UserStatus.ACTIVE,
     },
@@ -45,6 +46,38 @@ async function main() {
   });
 
   console.log(`✅ Admin account seeded: ${adminUser.email} (Role: ${adminUser.role})`);
+
+  // 2. Seed or update the demo Student account
+  const studentEmail = 'student@virtuallab.edu';
+  const studentPassword = process.env.STUDENT_PASSWORD || 'Student@Lab2026!';
+  const studentPasswordHash = await bcrypt.hash(studentPassword, salt);
+
+  const studentUser = await prisma.user.upsert({
+    where: { email: studentEmail },
+    update: {
+      passwordHash: studentPasswordHash,
+      role: Role.STUDENT,
+      status: UserStatus.ACTIVE,
+    },
+    create: {
+      email: studentEmail,
+      passwordHash: studentPasswordHash,
+      firstName: 'Alex',
+      lastName: 'Chen',
+      role: Role.STUDENT,
+      status: UserStatus.ACTIVE,
+      storageQuotaBytes: BigInt(104857600), // 100 MB
+      profile: {
+        create: {
+          studentId: 'CS-2026-042',
+          department: 'Computer Science & Engineering',
+          bio: 'Undergraduate Computer Science Student',
+        },
+      },
+    },
+  });
+
+  console.log(`✅ Demo Student account seeded: ${studentUser.email} (Role: ${studentUser.role})`);
 
   // 2. Seed Default Laboratories
   const defaultLabs = [

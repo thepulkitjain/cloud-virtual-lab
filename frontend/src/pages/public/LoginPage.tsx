@@ -49,6 +49,11 @@ export const LoginPage: React.FC = () => {
     setPassword('Admin@Lab2026!');
   };
 
+  const handleQuickFillStudent = () => {
+    setEmail('student@virtuallab.edu');
+    setPassword('Student@Lab2026!');
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative selection:bg-cyan-500/30 selection:text-cyan-200">
       {/* Background glow */}
@@ -152,25 +157,52 @@ export const LoginPage: React.FC = () => {
           </form>
 
           {/* Quick Demo Credentials Helper */}
-          <div className="mt-6 pt-5 border-t border-slate-800">
-            <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-              <span className="font-medium flex items-center gap-1 text-slate-300">
-                <Shield className="w-3.5 h-3.5 text-purple-400" />
-                Root Administrator Credentials:
-              </span>
-              <button
-                type="button"
-                onClick={handleQuickFillAdmin}
-                className="text-[10px] text-cyan-400 hover:text-cyan-300 underline font-mono cursor-pointer"
-              >
-                Auto-fill
-              </button>
+          <div className="mt-6 pt-5 border-t border-slate-800 space-y-3">
+            {/* Admin Credentials */}
+            <div>
+              <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+                <span className="font-medium flex items-center gap-1 text-slate-300">
+                  <Shield className="w-3.5 h-3.5 text-purple-400" />
+                  Admin Account:
+                </span>
+                <button
+                  type="button"
+                  onClick={handleQuickFillAdmin}
+                  className="text-[10px] text-purple-400 hover:text-purple-300 underline font-mono cursor-pointer"
+                >
+                  Auto-fill
+                </button>
+              </div>
+              <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 font-mono text-[11px] text-slate-400 flex items-center justify-between">
+                <div>
+                  <span>admin@virtuallab.edu</span>
+                  <span className="text-slate-600 mx-2">•</span>
+                  <span>Admin@Lab2026!</span>
+                </div>
+              </div>
             </div>
-            <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 font-mono text-[11px] text-slate-400 flex items-center justify-between">
-              <div>
-                <span>admin@virtuallab.edu</span>
-                <span className="text-slate-600 mx-2">•</span>
-                <span>Admin@Lab2026!</span>
+
+            {/* Student Credentials */}
+            <div>
+              <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+                <span className="font-medium flex items-center gap-1 text-slate-300">
+                  <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                  Demo Student:
+                </span>
+                <button
+                  type="button"
+                  onClick={handleQuickFillStudent}
+                  className="text-[10px] text-cyan-400 hover:text-cyan-300 underline font-mono cursor-pointer"
+                >
+                  Auto-fill
+                </button>
+              </div>
+              <div className="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 font-mono text-[11px] text-slate-400 flex items-center justify-between">
+                <div>
+                  <span>student@virtuallab.edu</span>
+                  <span className="text-slate-600 mx-2">•</span>
+                  <span>Student@Lab2026!</span>
+                </div>
               </div>
             </div>
           </div>
