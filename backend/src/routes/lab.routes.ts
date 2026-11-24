@@ -2,7 +2,11 @@ import { Router } from 'express';
 import { LabController } from '../controllers/lab.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
-import { executeCommandSchema, submitExerciseSchema } from '../validators/lab.validator';
+import {
+  executeCommandSchema,
+  submitExerciseSchema,
+  tabCompleteSchema,
+} from '../validators/lab.validator';
 
 const router = Router();
 
@@ -21,6 +25,12 @@ router.post(
   authenticate,
   validate(executeCommandSchema),
   LabController.executeCommand
+);
+router.post(
+  '/sessions/:sessionId/complete',
+  authenticate,
+  validate(tabCompleteSchema),
+  LabController.tabComplete
 );
 router.post(
   '/sessions/:sessionId/submit',

@@ -47,6 +47,12 @@ Click **"Start Laboratory Session"** on any laboratory to launch its workspace:
 #### 1. Linux Command-Line Terminal
 - Interactive simulated terminal environment.
 - **Allowed Commands:** `pwd`, `ls [-la]`, `cd <dir>`, `mkdir <dir>`, `touch <file>`, `cat <file>`, `echo "text" > <file>`, `whoami`, `uname`, `clear`, `help`.
+- **Tab Autocompletion:**
+  - Press `Tab` on any command prefix (e.g. `wh` + `Tab` $\rightarrow$ `whoami `, `c` + `Tab` $\rightarrow$ shows `cat  cd  clear`).
+  - Press `Tab` on file or directory path arguments (e.g. `cd st` + `Tab` $\rightarrow$ `cd student/`, `cat wel` + `Tab` $\rightarrow$ `cat welcome.txt `).
+  - Single matches auto-complete immediately: directories receive a trailing `/` for continuous subpath traversal, while files and commands receive a trailing space.
+  - Multiple candidate matches compute the longest common prefix (LCP) and display all candidates in the terminal output buffer without erasing your current line.
+  - Safely handles absolute paths (`/home/student`), relative paths (`../`, `./`), and user home shortcuts (`~`).
 - Tasks displayed in the **Exercise Sidebar** evaluate your commands in real time. When an exercise is completed, your score increases automatically.
 - Type `help` at any time to display available commands.
 

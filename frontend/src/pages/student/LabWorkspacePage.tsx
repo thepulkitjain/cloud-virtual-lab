@@ -151,6 +151,28 @@ export const LabWorkspacePage: React.FC = () => {
     }
   };
 
+  // Handle Tab Autocompletion inside simulated Linux VFS
+  const handleTabComplete = async (line: string) => {
+    if (!session || lab?.category !== 'LINUX') return null;
+    try {
+      const result = await LabService.tabComplete(session.id, line);
+      if (result.hasMultiple && result.matches.length > 0) {
+        // Display candidates in terminal output like standard bash
+        const matchEntry: TerminalEntry = {
+          id: `tab-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          command: line,
+          output: result.matches.join('  '),
+          currentPath,
+          timestamp: new Date().toLocaleTimeString(),
+        };
+        setTerminalEntries((prev) => [...prev, matchEntry]);
+      }
+      return result;
+    } catch {
+      return null;
+    }
+  };
+
   // End and complete the lab session
   const handleEndSession = async () => {
     if (!session) return;
@@ -269,6 +291,7 @@ export const LabWorkspacePage: React.FC = () => {
             currentPath={currentPath}
             entries={terminalEntries}
             onExecute={handleExecute}
+            onTabComplete={handleTabComplete}
             isLoading={isExecuting}
             onClear={() => setTerminalEntries([])}
             height="h-[480px]"

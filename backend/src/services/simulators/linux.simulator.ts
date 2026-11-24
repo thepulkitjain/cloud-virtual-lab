@@ -10,7 +10,76 @@ export interface LinuxSessionState {
   root: VirtualNode;
 }
 
+export const ALLOWED_LINUX_COMMANDS = [
+  'cat',
+  'cd',
+  'clear',
+  'echo',
+  'help',
+  'ls',
+  'mkdir',
+  'pwd',
+  'touch',
+  'uname',
+  'whoami',
+];
+
+export interface TabCompletionResult {
+  completedLine: string;
+  matches: string[];
+  prefix: string;
+  hasMultiple: boolean;
+  isCommand: boolean;
+}
+
 export class LinuxSimulator {
+  /**
+   * Canonical path normalization strictly within the simulated VFS boundary.
+   * Traversal beyond the virtual root '/' is prevented.
+   */
+  static normalizeVirtualPath(basePath: string, targetPath: string): string {
+    let fullPath: string;
+
+    if (targetPath === '~' || targetPath.startsWith('~/')) {
+      fullPath = targetPath === '~' ? '/home/student' : `/home/student/${targetPath.slice(2)}`;
+    } else if (targetPath.startsWith('/')) {
+      fullPath = targetPath;
+    } else {
+      fullPath = basePath === '/' ? `/${targetPath}` : `${basePath}/${targetPath}`;
+    }
+
+    const segments = fullPath.split('/').filter(Boolean);
+    const resolved: string[] = [];
+
+    for (const seg of segments) {
+      if (seg === '.') continue;
+      if (seg === '..') {
+        resolved.pop();
+      } else {
+        resolved.push(seg);
+      }
+    }
+
+    return '/' + resolved.join('/');
+  }
+
+  /**
+   * Helper to compute longest common prefix across a list of candidate strings
+   */
+  private static findLongestCommonPrefix(strings: string[]): string {
+    if (strings.length === 0) return '';
+    if (strings.length === 1) return strings[0];
+
+    let prefix = strings[0];
+    for (let i = 1; i < strings.length; i++) {
+      while (!strings[i].startsWith(prefix)) {
+        prefix = prefix.substring(0, prefix.length - 1);
+        if (prefix === '') return '';
+      }
+    }
+    return prefix;
+  }
+
   /**
    * Initializes a fresh Linux virtual file system for the student
    */
@@ -61,28 +130,159 @@ export class LinuxSimulator {
   }
 
   /**
-   * Resolves a path to a VirtualNode
+   * Resolves a path to a VirtualNode using normalized virtual hierarchy
    */
   private static resolveNode(state: LinuxSessionState, targetPath: string): VirtualNode | null {
-    const cleanPath = targetPath.startsWith('/')
-      ? targetPath
-      : `${state.currentPath}/${targetPath}`;
+    const cleanPath = this.normalizeVirtualPath(state.currentPath, targetPath);
+    if (cleanPath === '/') {
+      return state.root;
+    }
 
     const parts = cleanPath.split('/').filter(Boolean);
     let curr = state.root;
 
     for (const part of parts) {
-      if (part === '.') continue;
-      if (part === '..') {
-        // Can't go above root
-        continue;
-      }
       if (!curr.isDirectory || !curr.children.has(part)) {
         return null;
       }
       curr = curr.children.get(part)!;
     }
     return curr;
+  }
+
+  /**
+   * Autocompletes allowlisted commands and VFS file/directory paths
+   */
+  static getCompletions(commandLine: string, state: LinuxSessionState): TabCompletionResult {
+    const leadingSpaces = commandLine.match(/^\s*/)?.[0] || '';
+    const trimmedStart = commandLine.trimStart();
+
+    // 1. Command Autocompletion (No space typed yet)
+    if (!trimmedStart.includes(' ')) {
+      const prefix = trimmedStart;
+      const matches = ALLOWED_LINUX_COMMANDS.filter((cmd) => cmd.startsWith(prefix)).sort();
+
+      if (matches.length === 0) {
+        return {
+          completedLine: commandLine,
+          matches: [],
+          prefix,
+          hasMultiple: false,
+          isCommand: true,
+        };
+      }
+
+      if (matches.length === 1) {
+        return {
+          completedLine: `${leadingSpaces}${matches[0]} `,
+          matches,
+          prefix,
+          hasMultiple: false,
+          isCommand: true,
+        };
+      }
+
+      const lcp = this.findLongestCommonPrefix(matches);
+      return {
+        completedLine: `${leadingSpaces}${lcp}`,
+        matches,
+        prefix,
+        hasMultiple: true,
+        isCommand: true,
+      };
+    }
+
+    // 2. Argument / Path Autocompletion
+    const lastSpaceIdx = commandLine.lastIndexOf(' ');
+    const lineBeforeToken = commandLine.substring(0, lastSpaceIdx + 1);
+    const currentToken = commandLine.substring(lastSpaceIdx + 1);
+
+    const firstWord = trimmedStart.split(/\s+/)[0];
+    const isCd = firstWord === 'cd';
+
+    // Parse directory part vs file prefix part
+    let dirPart = '';
+    let filePrefix = currentToken;
+
+    if (currentToken.includes('/')) {
+      const lastSlashIdx = currentToken.lastIndexOf('/');
+      dirPart = currentToken.substring(0, lastSlashIdx + 1);
+      filePrefix = currentToken.substring(lastSlashIdx + 1);
+    }
+
+    // Determine target directory to search
+    let targetDirPath: string;
+    if (dirPart === '') {
+      targetDirPath = state.currentPath;
+    } else {
+      targetDirPath = dirPart;
+    }
+
+    const dirNode = this.resolveNode(state, targetDirPath);
+    if (!dirNode || !dirNode.isDirectory) {
+      return {
+        completedLine: commandLine,
+        matches: [],
+        prefix: currentToken,
+        hasMultiple: false,
+        isCommand: false,
+      };
+    }
+
+    // Collect candidate matches from children
+    const candidateMatches: string[] = [];
+    dirNode.children.forEach((childNode, name) => {
+      if (!name.startsWith(filePrefix)) return;
+
+      if (isCd) {
+        // cd prioritizes directories
+        if (childNode.isDirectory) {
+          candidateMatches.push(`${name}/`);
+        }
+      } else {
+        candidateMatches.push(childNode.isDirectory ? `${name}/` : name);
+      }
+    });
+
+    candidateMatches.sort();
+
+    if (candidateMatches.length === 0) {
+      return {
+        completedLine: commandLine,
+        matches: [],
+        prefix: currentToken,
+        hasMultiple: false,
+        isCommand: false,
+      };
+    }
+
+    if (candidateMatches.length === 1) {
+      const match = candidateMatches[0];
+      const isDirectory = match.endsWith('/');
+      // Files get trailing space, directories keep trailing slash without space so user can tab into subdirs
+      const suffix = isDirectory ? '' : ' ';
+      const completedLine = `${lineBeforeToken}${dirPart}${match}${suffix}`;
+
+      return {
+        completedLine,
+        matches: candidateMatches,
+        prefix: currentToken,
+        hasMultiple: false,
+        isCommand: false,
+      };
+    }
+
+    // Multiple matches: extend to longest common prefix
+    const lcp = this.findLongestCommonPrefix(candidateMatches);
+    const completedLine = `${lineBeforeToken}${dirPart}${lcp}`;
+
+    return {
+      completedLine,
+      matches: candidateMatches,
+      prefix: currentToken,
+      hasMultiple: true,
+      isCommand: false,
+    };
   }
 
   /**
@@ -169,22 +369,7 @@ export class LinuxSimulator {
 
       case 'cd': {
         const target = args[1] || '/home/student';
-        let newPath: string;
-
-        if (target === '~' || target === '/home/student') {
-          newPath = '/home/student';
-        } else if (target === '/') {
-          newPath = '/';
-        } else if (target === '..') {
-          const parts = state.currentPath.split('/').filter(Boolean);
-          parts.pop();
-          newPath = '/' + parts.join('/');
-          if (!newPath) newPath = '/';
-        } else if (target.startsWith('/')) {
-          newPath = target;
-        } else {
-          newPath = state.currentPath === '/' ? `/${target}` : `${state.currentPath}/${target}`;
-        }
+        const newPath = this.normalizeVirtualPath(state.currentPath, target);
 
         const node = this.resolveNode(state, newPath);
         if (!node) {

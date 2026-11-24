@@ -19,6 +19,10 @@ export const submitExerciseSchema = z.object({
     .max(5000, 'Code submission exceeds maximum length limit'),
 });
 
+export const tabCompleteSchema = z.object({
+  line: z.string().max(500, 'Command line exceeds maximum length limit'),
+});
+
 export const createLabSchema = z.object({
   title: z.string().trim().min(3, 'Title must be at least 3 characters').max(150),
   slug: z

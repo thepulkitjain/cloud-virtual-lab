@@ -147,10 +147,12 @@ sequenceDiagram
 ```
 
 ### Simulator Engines
-1. **Linux Virtual Filesystem (VFS):**
+1. **Linux Virtual Filesystem (VFS) & Tab Autocompletion Engine:**
    - Implements an in-memory tree of `VirtualNode` structures starting at `/home/student`.
    - Supports: `pwd`, `ls`, `cd`, `mkdir`, `touch`, `cat`, `echo`, `whoami`, `uname`, `clear`, `help`.
-   - Directory traversal (`..`, `/`) is bounded strictly within the simulated root.
+   - Directory traversal (`..`, `/`) is bounded strictly within the simulated root via `normalizeVirtualPath()`.
+   - **VFS Tab Completion:** Resolves command prefixes and filesystem paths contextually. For single matches, directories receive trailing slashes (`/`) and files receive trailing spaces. Multiple matches compute the Longest Common Prefix (LCP) and stream candidate arrays back to the terminal frontend without host filesystem queries.
+   - Zero-Host execution: Operates strictly against in-memory JavaScript objects with no host disk (`fs`) or child process access.
 2. **Networking Console:**
    - Predefined realistic diagnostic responses for `ping`, `ifconfig`, `nslookup`, `traceroute`, `netstat`, `curl`.
    - Teaches IP addressing, DNS resolution, and latency concepts without generating real outbound socket traffic.

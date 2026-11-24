@@ -102,6 +102,66 @@ describe('Module 2: Virtual Laboratory Management Tests', () => {
       expect(badRes.output).toContain('command not found');
     });
 
+    it('Linux Simulator: tab autocompletes allowlisted commands and VFS file/directory paths', () => {
+      const state = LinuxSimulator.createInitialState();
+
+      // 1. Empty command line -> returns all allowlisted commands
+      const emptyComp = LinuxSimulator.getCompletions('', state);
+      expect(emptyComp.isCommand).toBe(true);
+      expect(emptyComp.hasMultiple).toBe(true);
+      expect(emptyComp.matches).toContain('pwd');
+      expect(emptyComp.matches).toContain('cat');
+
+      // 2. Command completion - single match
+      const pComp = LinuxSimulator.getCompletions('p', state);
+      expect(pComp.isCommand).toBe(true);
+      expect(pComp.completedLine).toBe('pwd ');
+      expect(pComp.matches).toEqual(['pwd']);
+      expect(pComp.hasMultiple).toBe(false);
+
+      const whoComp = LinuxSimulator.getCompletions('who', state);
+      expect(whoComp.completedLine).toBe('whoami ');
+      expect(whoComp.matches).toEqual(['whoami']);
+
+      // 3. Command completion - multiple matches with LCP
+      const cComp = LinuxSimulator.getCompletions('c', state);
+      expect(cComp.isCommand).toBe(true);
+      expect(cComp.hasMultiple).toBe(true);
+      expect(cComp.matches).toEqual(['cat', 'cd', 'clear']);
+      expect(cComp.completedLine).toBe('c');
+
+      // 4. File completion - single match in current dir (/home/student)
+      const catW = LinuxSimulator.getCompletions('cat w', state);
+      expect(catW.isCommand).toBe(false);
+      expect(catW.completedLine).toBe('cat welcome.txt ');
+      expect(catW.matches).toEqual(['welcome.txt']);
+
+      // 5. File completion - multiple matches in current dir
+      const catEmpty = LinuxSimulator.getCompletions('cat ', state);
+      expect(catEmpty.isCommand).toBe(false);
+      expect(catEmpty.hasMultiple).toBe(true);
+      expect(catEmpty.matches).toEqual(['notes.txt', 'welcome.txt']);
+
+      // 6. Directory completion - cd prioritizes directories and appends trailing slash
+      LinuxSimulator.execute('mkdir my_folder', state);
+      const cdComp = LinuxSimulator.getCompletions('cd my', state);
+      expect(cdComp.completedLine).toBe('cd my_folder/');
+      expect(cdComp.matches).toEqual(['my_folder/']);
+
+      // 7. Path navigation completion (absolute path)
+      const absComp = LinuxSimulator.getCompletions('cd /h', state);
+      expect(absComp.completedLine).toBe('cd /home/');
+
+      // 8. Relative parent directory path completion
+      const parentComp = LinuxSimulator.getCompletions('cat ../', state);
+      expect(parentComp.matches).toContain('student/');
+
+      // 9. Non-existent path completion -> graceful empty matches
+      const noMatch = LinuxSimulator.getCompletions('cat nonexistent', state);
+      expect(noMatch.matches).toEqual([]);
+      expect(noMatch.completedLine).toBe('cat nonexistent');
+    });
+
     it('Networking Simulator: handles ping, ifconfig, nslookup, traceroute and curl', () => {
       const pingOut = NetworkingSimulator.execute('ping -c 4 192.168.1.1');
       expect(pingOut).toContain('4 packets transmitted');
@@ -204,6 +264,31 @@ describe('Module 2: Virtual Laboratory Management Tests', () => {
       expect(res.body.data.currentScore).toBeGreaterThan(0);
     });
 
+    it('POST /api/v1/labs/sessions/:sessionId/complete: evaluates tab-completion in active session', async () => {
+      // 1. Tab complete command
+      const cmdRes = await request(app)
+        .post(`/api/v1/labs/sessions/${activeSessionId}/complete`)
+        .set('Cookie', studentCookie)
+        .send({ line: 'wh' });
+
+      expect(cmdRes.status).toBe(200);
+      expect(cmdRes.body.success).toBe(true);
+      expect(cmdRes.body.data.completedLine).toBe('whoami ');
+      expect(cmdRes.body.data.matches).toEqual(['whoami']);
+      expect(cmdRes.body.data.isCommand).toBe(true);
+
+      // 2. Tab complete file in current directory
+      const fileRes = await request(app)
+        .post(`/api/v1/labs/sessions/${activeSessionId}/complete`)
+        .set('Cookie', studentCookie)
+        .send({ line: 'cat w' });
+
+      expect(fileRes.status).toBe(200);
+      expect(fileRes.body.data.completedLine).toBe('cat welcome.txt ');
+      expect(fileRes.body.data.matches).toEqual(['welcome.txt']);
+      expect(fileRes.body.data.isCommand).toBe(false);
+    });
+
     it('GET /api/v1/labs/my-sessions: lists user active/historical sessions', async () => {
       const res = await request(app)
         .get('/api/v1/labs/my-sessions')
@@ -243,6 +328,51 @@ describe('Module 2: Virtual Laboratory Management Tests', () => {
       expect(hackerRes.status).toBe(403);
       expect(hackerRes.body.success).toBe(false);
       expect(hackerRes.body.message).toContain('Forbidden');
+    });
+
+    it('SECURITY CHECK: Student B cannot tab-complete on Student A session (403 Forbidden)', async () => {
+      const startRes = await request(app)
+        .post(`/api/v1/labs/${linuxLabId}/sessions`)
+        .set('Cookie', studentCookie);
+      const targetSessionId = startRes.body.data.session.id;
+
+      const res = await request(app)
+        .post(`/api/v1/labs/sessions/${targetSessionId}/complete`)
+        .set('Cookie', otherStudentCookie)
+        .send({ line: 'ls' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain('Forbidden');
+    });
+
+    it('SECURITY CHECK: Cannot tab-complete on an already COMPLETED session (400 Bad Request)', async () => {
+      const startRes = await request(app)
+        .post(`/api/v1/labs/${linuxLabId}/sessions`)
+        .set('Cookie', studentCookie);
+      const closedSessionId = startRes.body.data.session.id;
+
+      await request(app)
+        .post(`/api/v1/labs/sessions/${closedSessionId}/end`)
+        .set('Cookie', studentCookie);
+
+      const res = await request(app)
+        .post(`/api/v1/labs/sessions/${closedSessionId}/complete`)
+        .set('Cookie', studentCookie)
+        .send({ line: 'ls' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain('closed');
+    });
+
+    it('SECURITY CHECK: Unauthenticated tab-completion is rejected (401 Unauthorized)', async () => {
+      const res = await request(app)
+        .post('/api/v1/labs/sessions/00000000-0000-0000-0000-000000000000/complete')
+        .send({ line: 'ls' });
+
+      expect(res.status).toBe(401);
+      expect(res.body.success).toBe(false);
     });
 
     it('SECURITY CHECK: Student cannot access Admin lab creation endpoints (403 Forbidden)', async () => {

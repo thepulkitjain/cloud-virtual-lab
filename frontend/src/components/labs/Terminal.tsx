@@ -24,6 +24,13 @@ interface TerminalProps {
   currentPath?: string;
   entries: TerminalEntry[];
   onExecute: (command: string) => Promise<void>;
+  onTabComplete?: (line: string) => Promise<{
+    completedLine: string;
+    matches: string[];
+    prefix: string;
+    hasMultiple: boolean;
+    isCommand: boolean;
+  } | null>;
   isLoading?: boolean;
   onClear?: () => void;
   height?: string;
@@ -36,6 +43,7 @@ export const Terminal: React.FC<TerminalProps> = ({
   currentPath = '~',
   entries,
   onExecute,
+  onTabComplete,
   isLoading = false,
   onClear,
   height = 'h-[500px]',
@@ -79,8 +87,32 @@ export const Terminal: React.FC<TerminalProps> = ({
     await onExecute(cmd);
   };
 
-  // Keyboard navigation for command history (Up / Down arrows)
+  // Keyboard navigation for command history (Up / Down arrows) & Tab Autocompletion
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (!onTabComplete || isLoading) return;
+
+      onTabComplete(inputVal)
+        .then((result) => {
+          if (!result) return;
+          if (result.completedLine) {
+            setInputVal(result.completedLine);
+            setTimeout(() => {
+              if (inputRef.current) {
+                const len = result.completedLine.length;
+                inputRef.current.setSelectionRange(len, len);
+                inputRef.current.focus();
+              }
+            }, 0);
+          }
+        })
+        .catch(() => {
+          // Graceful fallback on network glitch
+        });
+      return;
+    }
+
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (commandHistory.length === 0) return;

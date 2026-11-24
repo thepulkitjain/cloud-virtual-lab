@@ -5,6 +5,7 @@ import {
   LabSession,
   ExecuteCommandPayload,
   ExecuteCommandResult,
+  TabCompletionResult,
 } from '../types/lab.types';
 
 export interface ExecuteResponse extends ExecuteCommandResult {
@@ -79,6 +80,20 @@ export class LabService {
     const res = await apiClient.post<ApiResponse<ExecuteResponse>>(
       `/labs/sessions/${sessionId}/submit`,
       payload
+    );
+    return res.data.data!;
+  }
+
+  /**
+   * Request tab autocomplete suggestions for a command line in an active session.
+   */
+  static async tabComplete(
+    sessionId: string,
+    line: string
+  ): Promise<TabCompletionResult> {
+    const res = await apiClient.post<ApiResponse<TabCompletionResult>>(
+      `/labs/sessions/${sessionId}/complete`,
+      { line }
     );
     return res.data.data!;
   }

@@ -1,5 +1,5 @@
 import { LabCategory } from '@prisma/client';
-import { LinuxSimulator, LinuxSessionState } from './simulators/linux.simulator';
+import { LinuxSimulator, LinuxSessionState, TabCompletionResult } from './simulators/linux.simulator';
 import { NetworkingSimulator } from './simulators/networking.simulator';
 import { ProgrammingSimulator } from './simulators/programming.simulator';
 import { DatabaseSimulator, DbSessionState } from './simulators/database.simulator';
@@ -116,5 +116,31 @@ export class LabSimulatorService {
    */
   static destroySession(sessionId: string): void {
     sessionMemoryStore.delete(sessionId);
+  }
+
+  /**
+   * Generates tab autocomplete suggestions for terminal commands and paths
+   */
+  static tabComplete(
+    sessionId: string,
+    category: LabCategory,
+    commandLine: string
+  ): TabCompletionResult {
+    const memory = this.getOrCreateState(sessionId, category);
+
+    if (category === LabCategory.LINUX) {
+      if (!memory.linuxState) {
+        memory.linuxState = LinuxSimulator.createInitialState();
+      }
+      return LinuxSimulator.getCompletions(commandLine, memory.linuxState);
+    }
+
+    return {
+      completedLine: commandLine,
+      matches: [],
+      prefix: '',
+      hasMultiple: false,
+      isCommand: false,
+    };
   }
 }

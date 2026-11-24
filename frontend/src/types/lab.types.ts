@@ -80,3 +80,11 @@ export interface SubmitExercisePayload {
   commandInput: string;
   outputResult: string;
 }
+
+export interface TabCompletionResult {
+  completedLine: string;
+  matches: string[];
+  prefix: string;
+  hasMultiple: boolean;
+  isCommand: boolean;
+}

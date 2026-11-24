@@ -2,6 +2,7 @@ import { LabCategory, LabDifficulty, SessionStatus, SubmissionStatus } from '@pr
 import { prisma } from '../config/database';
 import { AppError } from '../types';
 import { LabSimulatorService, SimulatorExecutionResult } from './lab-simulator.service';
+import { TabCompletionResult } from './simulators/linux.simulator';
 
 export interface LabFilters {
   category?: LabCategory;
@@ -261,6 +262,40 @@ export class LabService {
       submission: submissionRecord,
       currentScore: newScore,
     };
+  }
+
+  /**
+   * Generates tab autocomplete suggestions for active session
+   */
+  static async tabComplete(
+    userId: string,
+    sessionId: string,
+    commandLine: string
+  ): Promise<TabCompletionResult> {
+    const session = await prisma.labSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        lab: {
+          select: {
+            category: true,
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new AppError('Lab session not found.', 404);
+    }
+
+    if (session.userId !== userId) {
+      throw new AppError('Forbidden: You are not authorized to access this session.', 403);
+    }
+
+    if (session.status !== SessionStatus.IN_PROGRESS) {
+      throw new AppError('This lab session is already closed.', 400);
+    }
+
+    return LabSimulatorService.tabComplete(session.id, session.lab.category, commandLine);
   }
 
   /**

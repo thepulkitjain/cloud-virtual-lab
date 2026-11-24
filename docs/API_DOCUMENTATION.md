@@ -196,7 +196,51 @@ In the event of a client or server error:
 
 ---
 
-### 3.5 Submit Code or Command for Evaluation
+### 3.5 Tab Autocomplete in Terminal Simulator
+- **Route:** `POST /api/v1/labs/sessions/:sessionId/complete`
+- **Access:** Authenticated (Session Owner Only)
+- **Request Body:**
+  ```json
+  {
+    "line": "cd st"
+  }
+  ```
+- **Response (`200 OK`):**
+  ```json
+  {
+    "success": true,
+    "message": "Tab completion resolved.",
+    "data": {
+      "line": "cd student/",
+      "matches": [
+        "student/"
+      ],
+      "hasMultiple": false,
+      "completed": true
+    }
+  }
+  ```
+- **Multiple Matches Example Response (`200 OK`):**
+  ```json
+  {
+    "success": true,
+    "message": "Tab completion resolved.",
+    "data": {
+      "line": "c",
+      "matches": [
+        "cat",
+        "cd",
+        "clear"
+      ],
+      "hasMultiple": true,
+      "completed": false
+    }
+  }
+  ```
+
+---
+
+### 3.6 Submit Code or Command for Evaluation
 - **Route:** `POST /api/v1/labs/sessions/:id/submit`
 - **Request Body:**
   ```json
@@ -208,7 +252,7 @@ In the event of a client or server error:
 
 ---
 
-### 3.6 End Lab Session
+### 3.7 End Lab Session
 - **Route:** `POST /api/v1/labs/sessions/:id/end`
 - **Access:** Authenticated Session Owner
 - **Response (`200 OK`):** Closes session, sets `status: COMPLETED`, records `endedAt`.

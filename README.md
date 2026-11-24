@@ -6,7 +6,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18.6-336791.svg?logo=postgresql)](https://www.postgresql.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-5.22-2d3748.svg?logo=prisma)](https://www.prisma.io/)
 [![Redis](https://img.shields.io/badge/Redis-7.x_Distributed-red.svg?logo=redis)](https://redis.io/)
-[![Vitest](https://img.shields.io/badge/Tests-152%2F152_Passing-brightgreen.svg?logo=vitest)](https://vitest.dev/)
+[![Vitest](https://img.shields.io/badge/Tests-157%2F157_Passing-brightgreen.svg?logo=vitest)](https://vitest.dev/)
 [![Security Hardened](https://img.shields.io/badge/Security-AES--256--GCM_Authenticated-purple.svg)](docs/SECURITY.md)
 [![License](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
@@ -36,7 +36,7 @@ A centralized, browser-accessible environment that provides:
 ## 🌟 Main Features
 
 ### 1. Simulated Virtual Laboratories
-- **Linux Terminal Simulator:** Interactive sandboxed shell supporting `pwd`, `ls [-la]`, `cd`, `mkdir`, `touch`, `cat`, `echo`, `whoami`, `uname`, and `clear` with an in-memory virtual filesystem (VFS).
+- **Linux Terminal Simulator:** Interactive sandboxed shell supporting `pwd`, `ls [-la]`, `cd`, `mkdir`, `touch`, `cat`, `echo`, `whoami`, `uname`, and `clear` with an in-memory virtual filesystem (VFS) and intelligent Tab autocompletion for commands, file paths, and directories.
 - **Networking Diagnostic Console:** Realistic educational simulation of network diagnostics: `ping`, `ifconfig`, `nslookup`, `traceroute`, `netstat`, `curl`.
 - **Programming Lab:** Safe AST and pattern evaluation for Python (`python3`) and JavaScript (`node`) exercises without host execution.
 - **SQL Database Playground:** Isolated in-memory PostgreSQL relation catalog supporting `SELECT`, `INSERT`, `UPDATE`, `DELETE`, and meta-commands (`\dt`, `\d`, `\l`).

@@ -76,6 +76,26 @@ export class LabController {
     }
   }
 
+  static async tabComplete(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { line } = req.body;
+      const result = await LabService.tabComplete(
+        req.user!.id,
+        req.params.sessionId,
+        line ?? ''
+      );
+
+      sendResponse({
+        res,
+        statusCode: 200,
+        message: 'Tab completion evaluated successfully.',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async submitExercise(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { commandInput, exerciseId } = req.body;
