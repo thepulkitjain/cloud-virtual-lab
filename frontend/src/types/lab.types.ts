@@ -2,6 +2,7 @@ export type LabCategory = 'LINUX' | 'NETWORKING' | 'PROGRAMMING' | 'DATABASE';
 export type LabDifficulty = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 export type SessionStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
 export type SubmissionStatus = 'PASSED' | 'FAILED' | 'PENDING';
+export type SupportedLanguage = 'python' | 'javascript';
 
 export interface LabExercise {
   id: string;
@@ -64,6 +65,8 @@ export interface LabSession {
 export interface ExecuteCommandPayload {
   command: string;
   exerciseId?: string;
+  code?: string;
+  language?: SupportedLanguage;
 }
 
 export interface ExecuteCommandResult {

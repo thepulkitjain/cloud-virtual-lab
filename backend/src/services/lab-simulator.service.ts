@@ -44,7 +44,8 @@ export class LabSimulatorService {
     sessionId: string,
     category: LabCategory,
     commandStr: string,
-    exerciseCriteria?: { expectedCommand?: string | null; expectedOutput?: string | null }
+    exerciseCriteria?: { expectedCommand?: string | null; expectedOutput?: string | null },
+    codeOptions?: { code?: string; language?: 'python' | 'javascript' }
   ): SimulatorExecutionResult {
     const memory = this.getOrCreateState(sessionId, category);
     let output = '';
@@ -67,7 +68,7 @@ export class LabSimulatorService {
       }
 
       case LabCategory.PROGRAMMING: {
-        output = ProgrammingSimulator.execute(commandStr);
+        output = ProgrammingSimulator.execute(commandStr, codeOptions?.code, codeOptions?.language);
         break;
       }
 

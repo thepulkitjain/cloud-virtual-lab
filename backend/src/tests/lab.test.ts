@@ -569,6 +569,54 @@ describe('Module 2: Virtual Laboratory Management Tests', () => {
       const powershellEscape = ProgrammingSimulator.execute('powershell.exe -Command "whoami"');
       expect(powershellEscape).toContain('not supported');
     });
+
+    it('evaluates modified Python & JavaScript code buffers, handles unsupported constructs, and blocks host access', () => {
+      // Modified Python function + f-string
+      const pyCode = [
+        'def add_numbers(a, b):',
+        '    return a + b',
+        'result = add_numbers(10, 32)',
+        'print(f"Sum Result: {result}")',
+      ].join('\n');
+      expect(ProgrammingSimulator.execute('python3 app.py', pyCode, 'python')).toBe('Sum Result: 42');
+
+      // Modified JavaScript function + object + JSON.stringify
+      const jsCode = [
+        'const modules = ["auth", "lab"];',
+        'function buildStatus(list) {',
+        '  return { status: "ok", modules: list };',
+        '}',
+        'console.log(JSON.stringify(buildStatus(modules)));',
+      ].join('\n');
+      expect(ProgrammingSimulator.execute('node index.js', jsCode, 'javascript')).toBe(
+        '{"status":"ok","modules":["auth","lab"]}'
+      );
+
+      // Empty code buffer
+      expect(ProgrammingSimulator.execute('python3 app.py', '   ', 'python')).toContain('empty');
+      expect(ProgrammingSimulator.execute('node index.js', '', 'javascript')).toContain('empty');
+
+      // Runtime mismatch
+      expect(ProgrammingSimulator.execute('python3 app.py', 'console.log(1)', 'javascript')).toContain(
+        'Runtime mismatch'
+      );
+
+      // Security denylist
+      expect(ProgrammingSimulator.execute('python3 app.py', 'import os\nprint("hi")', 'python')).toContain(
+        'Sandbox Security'
+      );
+      expect(
+        ProgrammingSimulator.execute('node index.js', 'const fs = require("fs");', 'javascript')
+      ).toContain('Sandbox Security');
+
+      // Unsupported constructs produce clear simulated messages
+      expect(ProgrammingSimulator.execute('python3 app.py', 'while True:\n  print(1)', 'python')).toContain(
+        'Unsupported construct'
+      );
+      expect(ProgrammingSimulator.execute('node index.js', 'class Demo {}', 'javascript')).toContain(
+        'Unsupported construct'
+      );
+    });
   });
 
   describe('8. Comprehensive SQL Playground & Database Isolation', () => {
@@ -733,6 +781,69 @@ describe('Module 2: Virtual Laboratory Management Tests', () => {
       expect(execRes.status).toBe(400);
       expect(execRes.body.success).toBe(false);
       expect(execRes.body.message).toContain('already closed');
+    });
+  });
+
+  describe('10. CodeEditor Buffer Execution API & Validation', () => {
+    it('executes modified Python and JavaScript buffers through /execute and validates input', async () => {
+      const labsRes = await request(app)
+        .get('/api/v1/labs?category=PROGRAMMING')
+        .set('Cookie', studentCookie);
+      expect(labsRes.status).toBe(200);
+      const progLab = labsRes.body.data.labs[0];
+      expect(progLab).toBeDefined();
+
+      const startRes = await request(app)
+        .post(`/api/v1/labs/${progLab.id}/sessions`)
+        .set('Cookie', studentCookie);
+      expect([200, 201]).toContain(startRes.status);
+      const progSessionId = startRes.body.data.session.id;
+
+      // 1. Execute custom Python buffer
+      const pyRes = await request(app)
+        .post(`/api/v1/labs/sessions/${progSessionId}/execute`)
+        .set('Cookie', studentCookie)
+        .send({
+          command: 'python3 app.py',
+          code: 'x = 15\ny = 27\nprint(x + y)',
+          language: 'python',
+        });
+      expect(pyRes.status).toBe(200);
+      expect(pyRes.body.data.output).toBe('42');
+
+      // 2. Execute custom JavaScript buffer
+      const jsRes = await request(app)
+        .post(`/api/v1/labs/sessions/${progSessionId}/execute`)
+        .set('Cookie', studentCookie)
+        .send({
+          command: 'node index.js',
+          code: 'const tag = "Phase9D";\nconsole.log(`Editor ${tag}`);',
+          language: 'javascript',
+        });
+      expect(jsRes.status).toBe(200);
+      expect(jsRes.body.data.output).toBe('Editor Phase9D');
+
+      // 3. Reject invalid language enum
+      const badLangRes = await request(app)
+        .post(`/api/v1/labs/sessions/${progSessionId}/execute`)
+        .set('Cookie', studentCookie)
+        .send({
+          command: 'python3 app.py',
+          code: 'print(1)',
+          language: 'ruby',
+        });
+      expect(badLangRes.status).toBe(400);
+
+      // 4. Reject oversized code buffer (>10000 chars)
+      const hugeRes = await request(app)
+        .post(`/api/v1/labs/sessions/${progSessionId}/execute`)
+        .set('Cookie', studentCookie)
+        .send({
+          command: 'python3 app.py',
+          code: 'a = 1\n'.repeat(2500),
+          language: 'python',
+        });
+      expect(hugeRes.status).toBe(400);
     });
   });
 });

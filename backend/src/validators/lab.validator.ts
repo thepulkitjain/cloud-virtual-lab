@@ -8,6 +8,11 @@ export const executeCommandSchema = z.object({
     .min(1, 'Command cannot be empty')
     .max(2000, 'Command exceeds maximum length limit'),
   exerciseId: z.string().uuid('Invalid exercise ID format').optional(),
+  code: z
+    .string()
+    .max(10000, 'Code buffer exceeds maximum length limit')
+    .optional(),
+  language: z.enum(['python', 'javascript']).optional(),
 });
 
 export const submitExerciseSchema = z.object({

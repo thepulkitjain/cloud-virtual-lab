@@ -181,7 +181,9 @@ export class LabService {
     userId: string,
     sessionId: string,
     command: string,
-    exerciseId?: string
+    exerciseId?: string,
+    code?: string,
+    language?: 'python' | 'javascript'
   ): Promise<SimulatorExecutionResult & { submission?: any; currentScore: number }> {
     const session = await prisma.labSession.findUnique({
       where: { id: sessionId },
@@ -220,7 +222,8 @@ export class LabService {
       targetExercise ? {
         expectedCommand: targetExercise.expectedCommand,
         expectedOutput: targetExercise.expectedOutput,
-      } : undefined
+      } : undefined,
+      code !== undefined || language !== undefined ? { code, language } : undefined
     );
 
     let submissionRecord = null;

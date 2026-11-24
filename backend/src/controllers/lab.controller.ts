@@ -57,12 +57,14 @@ export class LabController {
 
   static async executeCommand(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { command, exerciseId } = req.body;
+      const { command, exerciseId, code, language } = req.body;
       const result = await LabService.executeCommand(
         req.user!.id,
         req.params.sessionId,
         command,
-        exerciseId
+        exerciseId,
+        code,
+        language
       );
 
       sendResponse({

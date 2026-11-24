@@ -1,14 +1,22 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
 import { ApiResponse } from '../types/api.types';
 
-const rawApiUrl = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
-const normalizedBaseUrl = rawApiUrl
-  ? rawApiUrl.endsWith('/api/v1')
-    ? rawApiUrl
-    : rawApiUrl.endsWith('/')
-    ? `${rawApiUrl}api/v1`
-    : `${rawApiUrl}/api/v1`
-  : '/api/v1';
+export function normalizeApiBaseUrl(rawUrl: string): string {
+  const cleaned = rawUrl.trim().replace(/\/+$/, '');
+  if (!cleaned) {
+    return '/api/v1';
+  }
+  if (cleaned.endsWith('/api/v1')) {
+    return cleaned;
+  }
+  if (cleaned.endsWith('/api')) {
+    return `${cleaned}/v1`;
+  }
+  return `${cleaned}/api/v1`;
+}
+
+const rawApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
+const normalizedBaseUrl = normalizeApiBaseUrl(rawApiUrl);
 
 export const apiClient = axios.create({
   baseURL: normalizedBaseUrl,

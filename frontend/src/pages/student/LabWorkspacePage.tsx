@@ -10,13 +10,14 @@ import {
   Loader2,
   AlertCircle,
 } from 'lucide-react';
-import { Lab, LabSession, LabExercise } from '../../types/lab.types';
+import { Lab, LabSession, LabExercise, SupportedLanguage } from '../../types/lab.types';
 import LabService from '../../services/lab.service';
 import Terminal, { TerminalEntry } from '../../components/labs/Terminal';
 import ExerciseSidebar from '../../components/labs/ExerciseSidebar';
 import SqlPlayground from '../../components/labs/SqlPlayground';
 import NetworkingConsole from '../../components/labs/NetworkingConsole';
 import CodeRunner from '../../components/labs/CodeRunner';
+import CodeEditor from '../../components/labs/CodeEditor';
 import { useToast } from '../../contexts/ToastContext';
 
 export const LabWorkspacePage: React.FC = () => {
@@ -97,7 +98,10 @@ export const LabWorkspacePage: React.FC = () => {
   }, [initializeWorkspace]);
 
   // Execute command inside the isolated virtual simulator
-  const handleExecute = async (command: string) => {
+  const handleExecute = async (
+    command: string,
+    options?: { code?: string; language?: SupportedLanguage }
+  ) => {
     if (!session) {
       warning('Session is not active. Please refresh the page.');
       return;
@@ -108,6 +112,8 @@ export const LabWorkspacePage: React.FC = () => {
       const result = await LabService.executeCommand(session.id, {
         command,
         exerciseId: activeExerciseId || undefined,
+        code: options?.code,
+        language: options?.language,
       });
 
       if (result.currentPath) {
@@ -305,7 +311,10 @@ export const LabWorkspacePage: React.FC = () => {
             <NetworkingConsole onRunCommand={handleExecute} disabled={isExecuting} />
           )}
           {lab.category === 'PROGRAMMING' && (
-            <CodeRunner onRunCode={handleExecute} disabled={isExecuting} />
+            <>
+              <CodeEditor onRunCode={handleExecute} disabled={isExecuting} />
+              <CodeRunner onRunCode={handleExecute} disabled={isExecuting} />
+            </>
           )}
         </div>
 
