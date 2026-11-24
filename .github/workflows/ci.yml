@@ -91,7 +91,7 @@ jobs:
         working-directory: ./backend
         run: npx prisma db seed
 
-      - name: Run Backend Automated Test Suite (152 Tests)
+      - name: Run Backend Automated Test Suite (159 Tests)
         working-directory: ./backend
         run: npm test
 

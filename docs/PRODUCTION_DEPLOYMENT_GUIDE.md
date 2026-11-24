@@ -45,7 +45,7 @@ flowchart TD
 
 ## 2. Cloud Hosting Options Evaluation
 
-Because the system implements cryptographic at-rest file encryption written directly to disk (`storage/uploads`), **ephemeral serverless functions (e.g. AWS Lambda, Vercel Serverless Functions) cannot retain uploaded files across cold restarts unless an S3 adapter is added**. Containerized hosts with persistent volumes or virtual servers provide native compatibility.
+Because the system implements cryptographic at-rest file encryption, **ephemeral serverless functions (e.g. AWS Lambda, Vercel Serverless Functions) require setting `STORAGE_DRIVER=s3` (AWS S3, Cloudflare R2, or MinIO) to retain uploaded files across cold restarts**. Containerized hosts with persistent volumes or virtual servers also support `STORAGE_DRIVER=local` natively.
 
 | Platform | Recommended Tier | Architecture Role | Pros | Limitations / Persistent Disk | Monthly Cost |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -71,9 +71,14 @@ For demonstration and production evaluation, **Option A (Docker VPS via `docker-
 | `JWT_SECRET` | Yes | *(Must be ≥ 32 characters)* | Cryptographic signing key for authentication tokens. |
 | `JWT_EXPIRES_IN` | No | `1d` | Expiration lifespan of user login sessions. |
 | `COOKIE_SAME_SITE` | No | `lax` (`none` for cross-site) | SameSite attribute for the `token` HTTP-only cookie. |
-| `COOKIE_SECURE` | No | `true` | Requires HTTPS transmission for auth cookies. |
+| `COOKIE_SECURE` | No | `true` | Requires HTTPS transmission for auth cookies (set `false` only for local HTTP Docker testing). |
+| `STORAGE_DRIVER` | No | `local` | Storage driver: `local` (disk/volume) or `s3` (AWS S3, Cloudflare R2, MinIO). |
 | `STORAGE_ENCRYPTION_SECRET` | Yes | *(64-character hexadecimal key)* | 256-bit AES-GCM master encryption secret. |
-| `STORAGE_UPLOAD_PATH` | Yes | `/app/storage/uploads` | Path to the persistent storage directory on disk. |
+| `STORAGE_UPLOAD_PATH` | Yes | `/app/storage/uploads` | Path to the persistent storage directory on disk (when `STORAGE_DRIVER=local`). |
+| `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT` | If `s3` | `us-east-1` | Required bucket, region, and optional R2/MinIO endpoint when `STORAGE_DRIVER=s3`. |
+| `REDIS_ENABLED` | No | `true` | Enables Redis-backed distributed rate limiting and JWT session revocation. |
+| `REDIS_HOST` / `REDIS_PORT` | If Redis | `redis` / `6379` | Redis host and port inside Docker or managed Redis cluster. |
+| `REDIS_REQUIRED` | No | `true` (prod) / `false` (dev) | Fails startup if Redis is unreachable when `true`; falls back to in-memory when `false`. |
 | `MAX_FILE_SIZE_MB` | No | `25` | Maximum individual file upload threshold (MB). |
 | `DEFAULT_USER_QUOTA_MB` | No | `100` | Default per-student storage allocation (MB). |
 | `ADMIN_EMAIL` | No | `admin@virtuallab.edu` | Default admin email populated by seeder. |
@@ -123,7 +128,7 @@ docker compose -f docker-compose.prod.yml exec backend npx prisma db seed
 ```bash
 docker compose -f docker-compose.prod.yml ps
 ```
-All three services (`cvl_prod_postgres`, `cvl_prod_backend`, `cvl_prod_frontend`) should display `Up (healthy)`.
+All four services (`cvl_prod_postgres`, `cvl_prod_redis`, `cvl_prod_backend`, `cvl_prod_frontend`) should display `Up (healthy)`.
 
 ---
 
