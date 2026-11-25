@@ -213,7 +213,8 @@ export class LabService {
     command: string,
     exerciseId?: string,
     code?: string,
-    language?: 'python' | 'javascript'
+    language?: 'python' | 'javascript',
+    recordFailure = false
   ): Promise<SimulatorExecutionResult & { submission?: any; currentScore: number }> {
     const session = await this.getVerifiedActiveSession(userId, sessionId);
 
@@ -267,6 +268,19 @@ export class LabService {
         where: { id: session.id },
         data: { score: newScore },
       });
+    } else if (targetExercise && recordFailure && !simResult.exercisePassed) {
+      submissionRecord = await prisma.exerciseSubmission.create({
+        data: {
+          sessionId: session.id,
+          userId,
+          exerciseId: targetExercise.id,
+          commandInput: command,
+          outputResult: simResult.output,
+          status: SubmissionStatus.FAILED,
+        },
+      });
+      simResult.feedbackMessage =
+        'Submission did not meet exercise criteria. Review your command or output and try again.';
     }
 
     return {

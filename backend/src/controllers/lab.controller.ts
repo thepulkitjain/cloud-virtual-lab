@@ -105,7 +105,10 @@ export class LabController {
         req.user!.id,
         req.params.sessionId,
         commandInput,
-        exerciseId
+        exerciseId,
+        undefined,
+        undefined,
+        true
       );
 
       sendResponse({

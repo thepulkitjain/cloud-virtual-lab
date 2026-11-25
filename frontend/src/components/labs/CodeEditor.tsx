@@ -7,8 +7,19 @@ import {
   RotateCcw,
   FileCode,
   Sparkles,
+  UploadCloud,
+  FolderOpen,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { SupportedLanguage } from '../../types/lab.types';
+import { StoredFile } from '../../types/storage.types';
+import StorageService from '../../services/storage.service';
+import {
+  tokenizeCode,
+  TOKEN_COLORS,
+  detectLanguageFromFilename,
+} from '../../utils/syntaxHighlight';
 
 interface CodeEditorProps {
   onRunCode: (command: string, options?: { code?: string; language?: SupportedLanguage }) => void;
@@ -63,203 +74,6 @@ const FILE_METADATA: Record<
   },
 };
 
-const PYTHON_KEYWORDS = new Set([
-  'def',
-  'class',
-  'return',
-  'if',
-  'elif',
-  'else',
-  'for',
-  'while',
-  'break',
-  'continue',
-  'pass',
-  'import',
-  'from',
-  'as',
-  'try',
-  'except',
-  'finally',
-  'raise',
-  'with',
-  'yield',
-  'lambda',
-  'and',
-  'or',
-  'not',
-  'in',
-  'is',
-  'True',
-  'False',
-  'None',
-  'async',
-  'await',
-]);
-
-const PYTHON_BUILTINS = new Set([
-  'print',
-  'len',
-  'range',
-  'str',
-  'int',
-  'float',
-  'list',
-  'dict',
-  'set',
-  'tuple',
-  'enumerate',
-  'zip',
-  'map',
-  'filter',
-  'sum',
-  'min',
-  'max',
-  'open',
-  'type',
-  'isinstance',
-]);
-
-const JS_KEYWORDS = new Set([
-  'function',
-  'const',
-  'let',
-  'var',
-  'return',
-  'if',
-  'else',
-  'for',
-  'while',
-  'do',
-  'break',
-  'continue',
-  'switch',
-  'case',
-  'default',
-  'import',
-  'export',
-  'from',
-  'try',
-  'catch',
-  'finally',
-  'throw',
-  'new',
-  'class',
-  'extends',
-  'super',
-  'this',
-  'async',
-  'await',
-  'typeof',
-  'instanceof',
-  'true',
-  'false',
-  'null',
-  'undefined',
-]);
-
-const JS_BUILTINS = new Set([
-  'console',
-  'log',
-  'JSON',
-  'stringify',
-  'parse',
-  'Math',
-  'Array',
-  'Object',
-  'String',
-  'Number',
-  'Promise',
-  'fetch',
-  'setTimeout',
-  'map',
-  'filter',
-  'reduce',
-  'forEach',
-]);
-
-type TokenType =
-  | 'comment'
-  | 'string'
-  | 'number'
-  | 'keyword'
-  | 'builtin'
-  | 'function'
-  | 'operator'
-  | 'plain';
-
-interface Token {
-  type: TokenType;
-  value: string;
-}
-
-const TOKEN_COLORS: Record<TokenType, string> = {
-  comment: 'text-slate-500 italic',
-  string: 'text-emerald-400',
-  number: 'text-amber-300',
-  keyword: 'text-purple-400 font-semibold',
-  builtin: 'text-cyan-300',
-  function: 'text-sky-300',
-  operator: 'text-rose-300',
-  plain: 'text-slate-200',
-};
-
-function tokenizeCode(code: string, language: SupportedLanguage): Token[] {
-  const tokens: Token[] = [];
-  const keywords = language === 'python' ? PYTHON_KEYWORDS : JS_KEYWORDS;
-  const builtins = language === 'python' ? PYTHON_BUILTINS : JS_BUILTINS;
-
-  const pattern =
-    language === 'python'
-      ? /(#[^\n]*)|("""[\s\S]*?"""|'''[\s\S]*?'''|f?"(?:\\.|[^"\\])*"|f?'(?:\\.|[^'\\])*')|\b(0x[0-9a-fA-F]+|0b[01]+|\d+(?:\.\d+)?)\b|([A-Za-z_][A-Za-z0-9_]*)(?=\s*\()|\b([A-Za-z_][A-Za-z0-9_]*)\b|(==|!=|<=|>=|\*\*|\/\/|[+\-*/%=<>!&|^~]+)/g
-      : /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\b(0x[0-9a-fA-F]+|0b[01]+|\d+(?:\.\d+)?)\b|([A-Za-z_$][A-Za-z0-9_$]*)(?=\s*\()|\b([A-Za-z_$][A-Za-z0-9_$]*)\b|(=>|===|!==|==|!=|<=|>=|\+\+|--|\+=|-=|\*=|\/=|&&|\|\||[+\-*/%=<>!&|^~?]+)/g;
-
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(code)) !== null) {
-    if (match.index > lastIndex) {
-      tokens.push({ type: 'plain', value: code.slice(lastIndex, match.index) });
-    }
-
-    const [full, comment, str, num, fnCall, ident, op] = match;
-
-    if (comment) {
-      tokens.push({ type: 'comment', value: full });
-    } else if (str) {
-      tokens.push({ type: 'string', value: full });
-    } else if (num) {
-      tokens.push({ type: 'number', value: full });
-    } else if (fnCall) {
-      const type: TokenType = keywords.has(fnCall)
-        ? 'keyword'
-        : builtins.has(fnCall)
-        ? 'builtin'
-        : 'function';
-      tokens.push({ type, value: full });
-    } else if (ident) {
-      const type: TokenType = keywords.has(ident)
-        ? 'keyword'
-        : builtins.has(ident)
-        ? 'builtin'
-        : 'plain';
-      tokens.push({ type, value: full });
-    } else if (op) {
-      tokens.push({ type: 'operator', value: full });
-    } else {
-      tokens.push({ type: 'plain', value: full });
-    }
-
-    lastIndex = pattern.lastIndex;
-  }
-
-  if (lastIndex < code.length) {
-    tokens.push({ type: 'plain', value: code.slice(lastIndex) });
-  }
-
-  return tokens;
-}
-
 export const CodeEditor: React.FC<CodeEditorProps> = ({
   onRunCode,
   disabled = false,
@@ -271,6 +85,14 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     javascript: STARTER_TEMPLATES.javascript,
   });
   const [copied, setCopied] = useState(false);
+
+  // Vault integration states
+  const [isSavingVault, setIsSavingVault] = useState(false);
+  const [vaultSaved, setVaultSaved] = useState(false);
+  const [vaultError, setVaultError] = useState<string | null>(null);
+  const [showVaultPicker, setShowVaultPicker] = useState(false);
+  const [isLoadingVaultFiles, setIsLoadingVaultFiles] = useState(false);
+  const [vaultFiles, setVaultFiles] = useState<StoredFile[]>([]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
@@ -305,14 +127,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Ctrl+Enter or Cmd+Enter runs the active code
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       handleRun();
       return;
     }
 
-    // Tab inserts spaces instead of shifting focus
     if (e.key === 'Tab') {
       e.preventDefault();
       const textarea = e.currentTarget;
@@ -348,7 +168,62 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       ...prev,
       [language]: STARTER_TEMPLATES[language],
     }));
+    setVaultError(null);
     textareaRef.current?.focus();
+  };
+
+  const handleSaveToVault = async () => {
+    if (!code.trim() || isSavingVault) return;
+    setIsSavingVault(true);
+    setVaultError(null);
+    try {
+      const file = new File([code], meta.filename, { type: 'text/plain' });
+      await StorageService.uploadFile(file);
+      setVaultSaved(true);
+      setTimeout(() => setVaultSaved(false), 2500);
+    } catch (err: any) {
+      setVaultError(err?.message || 'Failed to save file to Encrypted Vault.');
+    } finally {
+      setIsSavingVault(false);
+    }
+  };
+
+  const handleOpenVaultPicker = async () => {
+    if (showVaultPicker) {
+      setShowVaultPicker(false);
+      return;
+    }
+    setShowVaultPicker(true);
+    setIsLoadingVaultFiles(true);
+    setVaultError(null);
+    try {
+      const files = await StorageService.listFiles({ category: 'CODE' });
+      const supportedFiles = files.filter(
+        (f) => detectLanguageFromFilename(f.originalName) !== null
+      );
+      setVaultFiles(supportedFiles);
+    } catch (err: any) {
+      setVaultError(err?.message || 'Failed to list Encrypted Vault files.');
+    } finally {
+      setIsLoadingVaultFiles(false);
+    }
+  };
+
+  const handleLoadVaultFile = async (file: StoredFile) => {
+    setIsLoadingVaultFiles(true);
+    setVaultError(null);
+    try {
+      const { data } = await StorageService.downloadFile(file.id);
+      const text = await data.text();
+      const targetLang = detectLanguageFromFilename(file.originalName) || language;
+      setLanguage(targetLang);
+      setBuffers((prev) => ({ ...prev, [targetLang]: text }));
+      setShowVaultPicker(false);
+    } catch (err: any) {
+      setVaultError(err?.message || 'Failed to decrypt and load file from Vault.');
+    } finally {
+      setIsLoadingVaultFiles(false);
+    }
   };
 
   return (
@@ -396,6 +271,37 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             </button>
           </div>
 
+          {/* Open from Vault */}
+          <button
+            type="button"
+            onClick={handleOpenVaultPicker}
+            title="Open Python/JS file from Encrypted Vault"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-300 text-[11px] font-medium transition cursor-pointer"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Open Vault</span>
+          </button>
+
+          {/* Save to Vault */}
+          <button
+            type="button"
+            disabled={isSavingVault || !code.trim()}
+            onClick={handleSaveToVault}
+            title="Encrypt and save script to Cloud Storage Vault"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-emerald-300 text-[11px] font-medium transition cursor-pointer disabled:opacity-50"
+          >
+            {isSavingVault ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+            ) : vaultSaved ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
+            )}
+            <span className={vaultSaved ? 'text-emerald-400' : ''}>
+              {vaultSaved ? 'Saved' : 'Save to Vault'}
+            </span>
+          </button>
+
           {/* Copy Code */}
           <button
             type="button"
@@ -439,6 +345,57 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Vault File Picker Panel */}
+      {showVaultPicker && (
+        <div className="px-4 py-3 bg-slate-950/90 border-b border-slate-800 space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-cyan-300 flex items-center gap-1.5 text-[11px]">
+              <FolderOpen className="w-3.5 h-3.5" />
+              Select Encrypted Python / JavaScript File from Vault
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowVaultPicker(false)}
+              className="text-slate-400 hover:text-white"
+              aria-label="Close vault picker"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {isLoadingVaultFiles ? (
+            <div className="flex items-center gap-2 text-slate-400 py-1 text-[11px]">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+              Loading encrypted code files...
+            </div>
+          ) : vaultFiles.length === 0 ? (
+            <p className="text-[11px] text-slate-500 py-1">
+              No .py or .js files found in your Cloud Storage Vault. Use &quot;Save to Vault&quot; to store scripts.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {vaultFiles.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => handleLoadVaultFile(f)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 hover:text-cyan-300 font-mono text-[11px] transition cursor-pointer"
+                >
+                  <FileCode className="w-3 h-3 text-amber-400" />
+                  <span>{f.originalName}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Vault Error Banner */}
+      {vaultError && (
+        <div className="px-4 py-2 bg-rose-950/40 border-b border-rose-800/40 text-rose-300 text-[11px]">
+          {vaultError}
+        </div>
+      )}
 
       {/* Editor Body: Line Numbers Gutter + Synchronized Overlay */}
       <div className="relative flex h-64 bg-slate-950 font-mono text-xs">

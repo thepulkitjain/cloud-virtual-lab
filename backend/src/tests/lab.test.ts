@@ -975,4 +975,90 @@ describe('Module 2: Virtual Laboratory Management Tests', () => {
       }
     });
   });
+
+  describe('12. Phase 9F.3: Bounded Loops, Conditionals & Exercise Submission History', () => {
+    it('evaluates Python & JS if/else conditionals and bounded for-loops with strict iteration limits', () => {
+      const pyLoopCond = [
+        'total = 0',
+        'for i in range(1, 5):',
+        '    if i % 2 == 0:',
+        '        total += i',
+        '    else:',
+        '        total += 1',
+        'print(total)',
+      ].join('\n');
+      expect(ProgrammingSimulator.execute('python3 app.py', pyLoopCond, 'python')).toBe('8');
+
+      const jsLoopCond = [
+        'let sum = 0;',
+        'for (let i = 0; i < 4; i++) {',
+        '  if (i >= 2) {',
+        '    sum += i;',
+        '  } else {',
+        '    sum += 1;',
+        '  }',
+        '}',
+        'console.log(sum);',
+      ].join('\n');
+      expect(ProgrammingSimulator.execute('node index.js', jsLoopCond, 'javascript')).toBe('7');
+
+      // Enforce strict iteration cap (>100)
+      const pyInfiniteGuard = 'for i in range(250):\n    print(i)';
+      expect(ProgrammingSimulator.execute('python3 app.py', pyInfiniteGuard, 'python')).toContain(
+        'Loop iteration limit'
+      );
+
+      const jsInfiniteGuard = 'for (let i = 0; i < 250; i++) { console.log(i); }';
+      expect(ProgrammingSimulator.execute('node index.js', jsInfiniteGuard, 'javascript')).toContain(
+        'Loop iteration limit'
+      );
+    });
+
+    it('records FAILED and PASSED explicit submissions and enforces student ownership on history', async () => {
+      const sessRes = await request(app)
+        .post(`/api/v1/labs/${linuxLabId}/sessions`)
+        .set('Cookie', studentCookie);
+      const sessId = sessRes.body.data.session.id;
+
+      // 1. Submit failing command -> recorded as FAILED
+      const failRes = await request(app)
+        .post(`/api/v1/labs/sessions/${sessId}/submit`)
+        .set('Cookie', studentCookie)
+        .send({
+          exerciseId: activeExerciseId,
+          commandInput: 'wrong_command_attempt',
+        });
+      expect(failRes.status).toBe(200);
+      expect(failRes.body.data.exercisePassed).toBe(false);
+      expect(failRes.body.data.submission.status).toBe('FAILED');
+      expect(failRes.body.data.feedbackMessage).toContain('did not meet exercise criteria');
+
+      // 2. Submit passing command -> recorded as PASSED
+      const passRes = await request(app)
+        .post(`/api/v1/labs/sessions/${sessId}/submit`)
+        .set('Cookie', studentCookie)
+        .send({
+          exerciseId: activeExerciseId,
+          commandInput: 'pwd',
+        });
+      expect(passRes.status).toBe(200);
+      expect(passRes.body.data.exercisePassed).toBe(true);
+      expect(passRes.body.data.submission.status).toBe('PASSED');
+
+      // 3. Owner retrieves both FAILED and PASSED attempts
+      const historyRes = await request(app)
+        .get(`/api/v1/labs/sessions/${sessId}`)
+        .set('Cookie', studentCookie);
+      expect(historyRes.status).toBe(200);
+      const statuses = historyRes.body.data.session.submissions.map((s: any) => s.status);
+      expect(statuses).toContain('FAILED');
+      expect(statuses).toContain('PASSED');
+
+      // 4. Peer student cannot access session submission history (403 Forbidden)
+      const peerRes = await request(app)
+        .get(`/api/v1/labs/sessions/${sessId}`)
+        .set('Cookie', otherStudentCookie);
+      expect(peerRes.status).toBe(403);
+    });
+  });
 });

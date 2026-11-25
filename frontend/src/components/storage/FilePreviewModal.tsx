@@ -11,6 +11,11 @@ import {
 import { StoredFile } from '../../types/storage.types';
 import StorageService from '../../services/storage.service';
 import { useToast } from '../../contexts/ToastContext';
+import {
+  detectLanguageFromFilename,
+  tokenizeCode,
+  TOKEN_COLORS,
+} from '../../utils/syntaxHighlight';
 
 interface FilePreviewModalProps {
   file: StoredFile | null;
@@ -161,9 +166,34 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               className="w-full h-[60vh] rounded-xl border border-slate-800 bg-white"
             />
           ) : isText ? (
-            <div className="w-full h-[60vh] overflow-auto rounded-xl border border-slate-800 bg-slate-900 p-4 font-mono text-xs text-slate-200 whitespace-pre-wrap leading-relaxed select-text">
-              {textContent}
-            </div>
+            (() => {
+              const detectedLang = detectLanguageFromFilename(file.originalName);
+              if (detectedLang && textContent !== null) {
+                const tokens = tokenizeCode(textContent, detectedLang);
+                return (
+                  <div className="w-full h-[60vh] overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-6 select-text">
+                    <div className="mb-2 flex items-center justify-between border-b border-slate-800/80 pb-2 text-[10px] text-slate-400">
+                      <span className="uppercase tracking-wider font-semibold text-amber-400">
+                        {detectedLang === 'python' ? 'Python 3' : 'JavaScript'} Syntax Preview
+                      </span>
+                      <span>{file.originalName}</span>
+                    </div>
+                    <pre className="m-0 whitespace-pre">
+                      {tokens.map((tok, idx) => (
+                        <span key={idx} className={TOKEN_COLORS[tok.type]}>
+                          {tok.value}
+                        </span>
+                      ))}
+                    </pre>
+                  </div>
+                );
+              }
+              return (
+                <div className="w-full h-[60vh] overflow-auto rounded-xl border border-slate-800 bg-slate-900 p-4 font-mono text-xs text-slate-200 whitespace-pre-wrap leading-relaxed select-text">
+                  {textContent}
+                </div>
+              );
+            })()
           ) : (
             <div className="text-center py-10 space-y-3">
               <FileText className="w-12 h-12 text-slate-600 mx-auto" />

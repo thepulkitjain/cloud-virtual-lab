@@ -6,7 +6,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18.6-336791.svg?logo=postgresql)](https://www.postgresql.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-5.22-2d3748.svg?logo=prisma)](https://www.prisma.io/)
 [![Redis](https://img.shields.io/badge/Redis-7.x_Distributed-red.svg?logo=redis)](https://redis.io/)
-[![Vitest](https://img.shields.io/badge/Tests-159%2F159_Passing-brightgreen.svg?logo=vitest)](https://vitest.dev/)
+[![Vitest](https://img.shields.io/badge/Tests-197%2F197_Passing-brightgreen.svg?logo=vitest)](https://vitest.dev/)
 [![Security Hardened](https://img.shields.io/badge/Security-AES--256--GCM_Authenticated-purple.svg)](docs/SECURITY.md)
 [![License](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 

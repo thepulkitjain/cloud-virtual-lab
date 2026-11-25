@@ -4,11 +4,14 @@ import {
   ArrowLeft,
   Clock,
   CheckCircle2,
+  XCircle,
   Play,
   Layers,
   History,
   Loader2,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { LabSession } from '../../types/lab.types';
 import LabService from '../../services/lab.service';
@@ -18,9 +21,31 @@ export const LabHistoryPage: React.FC = () => {
   const [sessions, setSessions] = useState<LabSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [sessionDetails, setSessionDetails] = useState<Record<string, LabSession>>({});
+  const [loadingDetailsId, setLoadingDetailsId] = useState<string | null>(null);
 
   const { error } = useToast();
   const navigate = useNavigate();
+
+  const handleToggleAttempts = async (sessionId: string) => {
+    if (expandedSessionId === sessionId) {
+      setExpandedSessionId(null);
+      return;
+    }
+    setExpandedSessionId(sessionId);
+    if (sessionDetails[sessionId]) return;
+
+    setLoadingDetailsId(sessionId);
+    try {
+      const details = await LabService.getSession(sessionId);
+      setSessionDetails((prev) => ({ ...prev, [sessionId]: details }));
+    } catch (err: any) {
+      error(err.message || 'Failed to load exercise submission attempts.');
+    } finally {
+      setLoadingDetailsId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchSessions = async () => {
@@ -116,61 +141,147 @@ export const LabHistoryPage: React.FC = () => {
               <tbody className="divide-y divide-slate-800/70 text-slate-300">
                 {sessions.map((s) => {
                   const isCompleted = s.status === 'COMPLETED';
+                  const isExpanded = expandedSessionId === s.id;
+                  const details = sessionDetails[s.id];
+                  const attemptCount = s._count?.submissions ?? 0;
 
                   return (
-                    <tr key={s.id} className="hover:bg-slate-800/40 transition">
-                      <td className="px-5 py-4 font-semibold text-white">
-                        {s.lab?.title || 'Virtual Lab'}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/50 border border-cyan-800/40 text-cyan-300">
-                          {s.lab?.category}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 font-mono text-[11px] text-slate-400">
-                        {formatDate(s.startedAt)}
-                      </td>
-                      <td className="px-5 py-4">
-                        {isCompleted ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400">
-                            <CheckCircle2 className="w-3 h-3" />
-                            COMPLETED
+                    <React.Fragment key={s.id}>
+                      <tr className="hover:bg-slate-800/40 transition">
+                        <td className="px-5 py-4 font-semibold text-white">
+                          {s.lab?.title || 'Virtual Lab'}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/50 border border-cyan-800/40 text-cyan-300">
+                            {s.lab?.category}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-400">
-                            <Clock className="w-3 h-3" />
-                            IN PROGRESS
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-white w-9">
-                            {s.score}%
-                          </span>
-                          <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 rounded-full"
-                              style={{ width: `${Math.max(s.score, 4)}%` }}
-                            />
+                        </td>
+                        <td className="px-5 py-4 font-mono text-[11px] text-slate-400">
+                          {formatDate(s.startedAt)}
+                        </td>
+                        <td className="px-5 py-4">
+                          {isCompleted ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400">
+                              <CheckCircle2 className="w-3 h-3" />
+                              COMPLETED
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-400">
+                              <Clock className="w-3 h-3" />
+                              IN PROGRESS
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-white w-9">
+                              {s.score}%
+                            </span>
+                            <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 rounded-full"
+                                style={{ width: `${Math.max(s.score, 4)}%` }}
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigate(`/labs/${s.lab?.id || s.labId}`, {
-                              state: { sessionId: s.id },
-                            })
-                          }
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition cursor-pointer"
-                        >
-                          <Play className="w-3 h-3 text-cyan-400" />
-                          {isCompleted ? 'Review Lab' : 'Resume Lab'}
-                        </button>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleAttempts(s.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-medium transition cursor-pointer"
+                            >
+                              <span>Attempts ({attemptCount})</span>
+                              {isExpanded ? (
+                                <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(`/labs/${s.lab?.id || s.labId}`, {
+                                  state: { sessionId: s.id },
+                                })
+                              }
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition cursor-pointer"
+                            >
+                              <Play className="w-3 h-3 text-cyan-400" />
+                              {isCompleted ? 'Review Lab' : 'Resume Lab'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {isExpanded && (
+                        <tr className="bg-slate-950/60">
+                          <td colSpan={6} className="px-5 py-4">
+                            {loadingDetailsId === s.id ? (
+                              <div className="flex items-center gap-2 text-slate-400 text-xs py-2">
+                                <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                                Loading exercise submission attempts...
+                              </div>
+                            ) : !details?.submissions || details.submissions.length === 0 ? (
+                              <p className="text-xs text-slate-500 py-1">
+                                No exercise submissions recorded for this session yet.
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                                  Submission Attempts ({details.submissions.length})
+                                </p>
+                                <div className="divide-y divide-slate-800/70 rounded-xl border border-slate-800 bg-slate-900/70 overflow-hidden">
+                                  {details.submissions.map((sub) => {
+                                    const ex = details.lab?.exercises?.find(
+                                      (e) => e.id === sub.exerciseId
+                                    );
+                                    const passed = sub.status === 'PASSED';
+                                    return (
+                                      <div
+                                        key={sub.id}
+                                        className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                                      >
+                                        <div className="space-y-1 min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            {passed ? (
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                <CheckCircle2 className="w-3 h-3" />
+                                                PASSED
+                                              </span>
+                                            ) : (
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                                <XCircle className="w-3 h-3" />
+                                                FAILED
+                                              </span>
+                                            )}
+                                            <span className="font-semibold text-white">
+                                              {ex?.title || 'Lab Exercise'}
+                                            </span>
+                                          </div>
+                                          <p className="font-mono text-[11px] text-cyan-300 truncate">
+                                            $ {sub.commandInput}
+                                          </p>
+                                          {sub.outputResult && (
+                                            <p className="font-mono text-[11px] text-slate-400 truncate">
+                                              {sub.outputResult}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <span className="text-[11px] font-mono text-slate-500 shrink-0">
+                                          {formatDate(sub.submittedAt)}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, Role, LoginPayload, RegisterPayload, UpdateProfilePayload, ChangePasswordPayload } from '../types/auth.types';
 import AuthService from '../services/auth.service';
+import { SESSION_EXPIRED_EVENT } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -37,6 +38,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
+
+  // Proactively synchronize AuthContext when an authenticated session expires or is revoked (HTTP 401)
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser((prev) => (prev ? null : prev));
+    };
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
+  }, []);
 
   const login = async (payload: LoginPayload): Promise<User> => {
     setIsLoading(true);

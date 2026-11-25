@@ -91,7 +91,7 @@ jobs:
         working-directory: ./backend
         run: npx prisma db seed
 
-      - name: Run Backend Automated Test Suite (159 Tests)
+      - name: Run Backend Automated Test Suite (165 Tests)
         working-directory: ./backend
         run: npm test
 
@@ -100,10 +100,10 @@ jobs:
         run: npm run build
 
   # ============================================================================
-  # 2. Frontend Production Bundle Compilation
+  # 2. Frontend Testing & Production Bundle Compilation
   # ============================================================================
   frontend-build:
-    name: Frontend CI (Bundle & TypeScript)
+    name: Frontend CI (Tests, Bundle & TypeScript)
     runs-on: ubuntu-latest
 
     steps:
@@ -120,6 +120,10 @@ jobs:
       - name: Install Frontend Dependencies
         working-directory: ./frontend
         run: npm ci
+
+      - name: Run Frontend Automated Test Suite (32 Tests)
+        working-directory: ./frontend
+        run: npm test
 
       - name: Build & Verify Production Bundle
         working-directory: ./frontend

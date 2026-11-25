@@ -27,12 +27,26 @@ export const apiClient = axios.create({
   timeout: 30000,
 });
 
+export const SESSION_EXPIRED_EVENT = 'auth:session-expired';
+
+const AUTH_BOOTSTRAP_PATHS = ['/auth/me', '/auth/login', '/auth/register', '/auth/logout'];
+
 apiClient.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     return response;
   },
   (error: AxiosError<ApiResponse>) => {
     let message = 'An unexpected server error occurred. Please try again.';
+
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      const requestUrl = String(error.config?.url || '');
+      const isAuthLifecycleEndpoint = AUTH_BOOTSTRAP_PATHS.some((path) =>
+        requestUrl.includes(path)
+      );
+      if (!isAuthLifecycleEndpoint) {
+        window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+      }
+    }
 
     if (error.response?.data?.message) {
       message = error.response.data.message;
