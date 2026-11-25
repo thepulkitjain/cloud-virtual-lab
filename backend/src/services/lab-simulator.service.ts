@@ -1,16 +1,54 @@
 import { LabCategory } from '@prisma/client';
-import { LinuxSimulator, LinuxSessionState, TabCompletionResult } from './simulators/linux.simulator';
+import { LinuxSimulator, LinuxSessionState, VirtualNode, TabCompletionResult } from './simulators/linux.simulator';
 import { NetworkingSimulator } from './simulators/networking.simulator';
-import { ProgrammingSimulator } from './simulators/programming.simulator';
+import { ProgrammingSimulator, SupportedLanguage } from './simulators/programming.simulator';
 import { DatabaseSimulator, DbSessionState } from './simulators/database.simulator';
+import { redisService } from './redis/redis.service';
+import envConfig from '../config/env.config';
 
-interface SessionSimulatorMemory {
+export interface SessionSimulatorMemory {
   linuxState?: LinuxSessionState;
   dbState?: DbSessionState;
 }
 
-// In-memory session state repository keyed by sessionId
-const sessionMemoryStore = new Map<string, SessionSimulatorMemory>();
+interface SerializedVirtualNode {
+  name: string;
+  isDirectory: boolean;
+  content: string;
+  children: Array<[string, SerializedVirtualNode]>;
+}
+
+interface SerializedLinuxState {
+  currentPath: string;
+  root: SerializedVirtualNode;
+}
+
+interface SerializedSessionMemory {
+  linuxState?: SerializedLinuxState;
+  dbState?: DbSessionState;
+}
+
+interface InMemoryEntry {
+  state: SessionSimulatorMemory;
+  expiresAt: number;
+}
+
+const SIMULATOR_KEY_PREFIX = 'sim:session:';
+const MAX_VFS_DEPTH = 64;
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+// In-memory fallback store keyed by sessionId with TTL expiration
+const sessionMemoryStore = new Map<string, InMemoryEntry>();
+
+// Periodic sweep for expired fallback entries (never blocks process exit)
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, entry] of sessionMemoryStore.entries()) {
+    if (entry.expiresAt <= now) {
+      sessionMemoryStore.delete(sessionId);
+    }
+  }
+}, 10 * 60 * 1000).unref();
 
 export interface SimulatorExecutionResult {
   output: string;
@@ -20,34 +58,180 @@ export interface SimulatorExecutionResult {
 }
 
 export class LabSimulatorService {
-  /**
-   * Initializes or returns simulator state for a given lab session
-   */
-  private static getOrCreateState(sessionId: string, category: LabCategory): SessionSimulatorMemory {
-    let state = sessionMemoryStore.get(sessionId);
-    if (!state) {
-      state = {};
-      if (category === LabCategory.LINUX) {
-        state.linuxState = LinuxSimulator.createInitialState();
-      } else if (category === LabCategory.DATABASE) {
-        state.dbState = DatabaseSimulator.createInitialState();
+  private static getRedisKey(sessionId: string): string {
+    return `${SIMULATOR_KEY_PREFIX}${sessionId}`;
+  }
+
+  private static serializeVirtualNode(node: VirtualNode): SerializedVirtualNode {
+    const children: Array<[string, SerializedVirtualNode]> = [];
+    for (const [key, child] of node.children.entries()) {
+      if (!FORBIDDEN_KEYS.has(key)) {
+        children.push([key, this.serializeVirtualNode(child)]);
       }
-      sessionMemoryStore.set(sessionId, state);
+    }
+    return {
+      name: node.name,
+      isDirectory: node.isDirectory,
+      content: node.content,
+      children,
+    };
+  }
+
+  private static deserializeVirtualNode(raw: unknown, depth = 0): VirtualNode | null {
+    if (depth > MAX_VFS_DEPTH || !raw || typeof raw !== 'object') {
+      return null;
+    }
+    const obj = raw as Record<string, unknown>;
+    if (
+      typeof obj.name !== 'string' ||
+      typeof obj.isDirectory !== 'boolean' ||
+      typeof obj.content !== 'string' ||
+      !Array.isArray(obj.children)
+    ) {
+      return null;
+    }
+
+    const children = new Map<string, VirtualNode>();
+    for (const entry of obj.children) {
+      if (!Array.isArray(entry) || entry.length !== 2) return null;
+      const [key, childRaw] = entry;
+      if (typeof key !== 'string' || FORBIDDEN_KEYS.has(key)) return null;
+      const childNode = this.deserializeVirtualNode(childRaw, depth + 1);
+      if (!childNode) return null;
+      children.set(key, childNode);
+    }
+
+    return {
+      name: obj.name,
+      isDirectory: obj.isDirectory,
+      content: obj.content,
+      children,
+    };
+  }
+
+  private static serializeState(state: SessionSimulatorMemory): string {
+    const payload: SerializedSessionMemory = {};
+    if (state.linuxState) {
+      payload.linuxState = {
+        currentPath: state.linuxState.currentPath,
+        root: this.serializeVirtualNode(state.linuxState.root),
+      };
+    }
+    if (state.dbState) {
+      payload.dbState = state.dbState;
+    }
+    return JSON.stringify(payload);
+  }
+
+  private static deserializeState(rawJson: string): SessionSimulatorMemory | null {
+    try {
+      const parsed = JSON.parse(rawJson) as unknown;
+      if (!parsed || typeof parsed !== 'object') return null;
+
+      const obj = parsed as Record<string, unknown>;
+      const result: SessionSimulatorMemory = {};
+
+      if (obj.linuxState !== undefined) {
+        if (!obj.linuxState || typeof obj.linuxState !== 'object') return null;
+        const ls = obj.linuxState as Record<string, unknown>;
+        if (typeof ls.currentPath !== 'string') return null;
+        const root = this.deserializeVirtualNode(ls.root, 0);
+        if (!root) return null;
+        result.linuxState = {
+          currentPath: ls.currentPath,
+          root,
+        };
+      }
+
+      if (obj.dbState !== undefined) {
+        if (!obj.dbState || typeof obj.dbState !== 'object') return null;
+        const db = obj.dbState as Record<string, unknown>;
+        if (!Array.isArray(db.students) || !Array.isArray(db.courses)) return null;
+        result.dbState = {
+          students: db.students as DbSessionState['students'],
+          courses: db.courses as DbSessionState['courses'],
+        };
+      }
+
+      return result;
+    } catch {
+      return null;
+    }
+  }
+
+  private static ensureCategoryState(
+    state: SessionSimulatorMemory,
+    category: LabCategory
+  ): SessionSimulatorMemory {
+    if (category === LabCategory.LINUX && !state.linuxState) {
+      state.linuxState = LinuxSimulator.createInitialState();
+    } else if (category === LabCategory.DATABASE && !state.dbState) {
+      state.dbState = DatabaseSimulator.createInitialState();
     }
     return state;
   }
 
   /**
+   * Loads simulator state from Redis (primary) or in-memory fallback (with TTL).
+   */
+  private static async loadOrCreateState(
+    sessionId: string,
+    category: LabCategory
+  ): Promise<SessionSimulatorMemory> {
+    if (redisService.isAvailable()) {
+      const raw = await redisService.get(this.getRedisKey(sessionId));
+      if (raw) {
+        const restored = this.deserializeState(raw);
+        if (restored) {
+          return this.ensureCategoryState(restored, category);
+        }
+      }
+    }
+
+    const existing = sessionMemoryStore.get(sessionId);
+    if (existing) {
+      if (existing.expiresAt > Date.now()) {
+        return this.ensureCategoryState(existing.state, category);
+      }
+      sessionMemoryStore.delete(sessionId);
+    }
+
+    return this.ensureCategoryState({}, category);
+  }
+
+  /**
+   * Persists simulator state to Redis with TTL and updates bounded in-memory fallback.
+   */
+  private static async saveState(
+    sessionId: string,
+    state: SessionSimulatorMemory,
+    ttlOverrideSeconds?: number
+  ): Promise<void> {
+    if (!state.linuxState && !state.dbState) {
+      return;
+    }
+
+    const ttlSeconds = Math.max(1, ttlOverrideSeconds ?? envConfig.simulatorStateTtlSeconds);
+    const expiresAt = Date.now() + ttlSeconds * 1000;
+    sessionMemoryStore.set(sessionId, { state, expiresAt });
+
+    if (redisService.isAvailable()) {
+      await redisService.set(this.getRedisKey(sessionId), this.serializeState(state), ttlSeconds);
+    }
+  }
+
+  /**
    * Dispatches a student command to the appropriate simulator engine
    */
-  static execute(
+  static async execute(
     sessionId: string,
     category: LabCategory,
     commandStr: string,
     exerciseCriteria?: { expectedCommand?: string | null; expectedOutput?: string | null },
-    codeOptions?: { code?: string; language?: 'python' | 'javascript' }
-  ): SimulatorExecutionResult {
-    const memory = this.getOrCreateState(sessionId, category);
+    codeOptions?: { code?: string; language?: SupportedLanguage },
+    ttlOverrideSeconds?: number
+  ): Promise<SimulatorExecutionResult> {
+    const memory = await this.loadOrCreateState(sessionId, category);
     let output = '';
     let currentPath: string | undefined;
 
@@ -59,6 +243,7 @@ export class LabSimulatorService {
         const res = LinuxSimulator.execute(commandStr, memory.linuxState);
         output = res.output;
         currentPath = res.currentPath;
+        await this.saveState(sessionId, memory, ttlOverrideSeconds);
         break;
       }
 
@@ -77,6 +262,7 @@ export class LabSimulatorService {
           memory.dbState = DatabaseSimulator.createInitialState();
         }
         output = DatabaseSimulator.execute(commandStr, memory.dbState);
+        await this.saveState(sessionId, memory, ttlOverrideSeconds);
         break;
       }
 
@@ -113,21 +299,44 @@ export class LabSimulatorService {
   }
 
   /**
-   * Cleans up session memory when session ends
+   * Cleans up session state from both in-memory store and Redis when session ends
    */
-  static destroySession(sessionId: string): void {
+  static async destroySession(sessionId: string): Promise<void> {
     sessionMemoryStore.delete(sessionId);
+    if (redisService.isAvailable()) {
+      await redisService.del(this.getRedisKey(sessionId));
+    }
+  }
+
+  /**
+   * Checks whether in-memory fallback state currently exists for a session (for diagnostics/testing)
+   */
+  static hasInMemoryState(sessionId: string): boolean {
+    const entry = sessionMemoryStore.get(sessionId);
+    if (!entry) return false;
+    if (entry.expiresAt <= Date.now()) {
+      sessionMemoryStore.delete(sessionId);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Clears all in-memory fallback entries (for isolated unit testing)
+   */
+  static clearInMemoryStore(): void {
+    sessionMemoryStore.clear();
   }
 
   /**
    * Generates tab autocomplete suggestions for terminal commands and paths
    */
-  static tabComplete(
+  static async tabComplete(
     sessionId: string,
     category: LabCategory,
     commandLine: string
-  ): TabCompletionResult {
-    const memory = this.getOrCreateState(sessionId, category);
+  ): Promise<TabCompletionResult> {
+    const memory = await this.loadOrCreateState(sessionId, category);
 
     if (category === LabCategory.LINUX) {
       if (!memory.linuxState) {

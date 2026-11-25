@@ -175,16 +175,9 @@ export class LabService {
   }
 
   /**
-   * Executes a command inside the simulated lab environment
+   * Verifies that a lab session exists, belongs to the requesting user, and is IN_PROGRESS.
    */
-  static async executeCommand(
-    userId: string,
-    sessionId: string,
-    command: string,
-    exerciseId?: string,
-    code?: string,
-    language?: 'python' | 'javascript'
-  ): Promise<SimulatorExecutionResult & { submission?: any; currentScore: number }> {
+  private static async getVerifiedActiveSession(userId: string, sessionId: string) {
     const session = await prisma.labSession.findUnique({
       where: { id: sessionId },
       include: {
@@ -208,6 +201,22 @@ export class LabService {
       throw new AppError('This lab session is already closed.', 400);
     }
 
+    return session;
+  }
+
+  /**
+   * Executes a command inside the simulated lab environment
+   */
+  static async executeCommand(
+    userId: string,
+    sessionId: string,
+    command: string,
+    exerciseId?: string,
+    code?: string,
+    language?: 'python' | 'javascript'
+  ): Promise<SimulatorExecutionResult & { submission?: any; currentScore: number }> {
+    const session = await this.getVerifiedActiveSession(userId, sessionId);
+
     // Determine criteria if an exerciseId is specified
     let targetExercise = null;
     if (exerciseId) {
@@ -215,7 +224,7 @@ export class LabService {
     }
 
     // Dispatch to simulator
-    const simResult = LabSimulatorService.execute(
+    const simResult = await LabSimulatorService.execute(
       session.id,
       session.lab.category,
       command,
@@ -275,29 +284,7 @@ export class LabService {
     sessionId: string,
     commandLine: string
   ): Promise<TabCompletionResult> {
-    const session = await prisma.labSession.findUnique({
-      where: { id: sessionId },
-      include: {
-        lab: {
-          select: {
-            category: true,
-          },
-        },
-      },
-    });
-
-    if (!session) {
-      throw new AppError('Lab session not found.', 404);
-    }
-
-    if (session.userId !== userId) {
-      throw new AppError('Forbidden: You are not authorized to access this session.', 403);
-    }
-
-    if (session.status !== SessionStatus.IN_PROGRESS) {
-      throw new AppError('This lab session is already closed.', 400);
-    }
-
+    const session = await this.getVerifiedActiveSession(userId, sessionId);
     return LabSimulatorService.tabComplete(session.id, session.lab.category, commandLine);
   }
 
@@ -329,8 +316,8 @@ export class LabService {
       },
     });
 
-    // Cleanup in-memory simulator data
-    LabSimulatorService.destroySession(sessionId);
+    // Cleanup Redis & in-memory simulator data
+    await LabSimulatorService.destroySession(sessionId);
 
     // Log completion
     await prisma.activityLog.create({

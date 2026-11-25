@@ -31,6 +31,7 @@ export interface AppConfig {
   redisDb: number;
   redisKeyPrefix: string;
   redisRequired: boolean;
+  simulatorStateTtlSeconds: number;
 }
 
 /**
@@ -99,6 +100,10 @@ export const validateEnvironment = (): AppConfig => {
     redisDb: parseInt(process.env.REDIS_DB || '0', 10),
     redisKeyPrefix: process.env.REDIS_KEY_PREFIX || 'cvl:',
     redisRequired: process.env.REDIS_REQUIRED === 'true',
+    simulatorStateTtlSeconds: Math.max(
+      1,
+      parseInt(process.env.SIMULATOR_STATE_TTL_SECONDS || '3600', 10) || 3600
+    ),
   };
 };
 

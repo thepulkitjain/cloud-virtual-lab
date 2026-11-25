@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
-import { authLimiter } from '../middleware/rateLimiter';
+import { authLimiter, passwordChangeLimiter } from '../middleware/rateLimiter';
 import {
   registerSchema,
   loginSchema,
@@ -22,6 +22,7 @@ router.get('/me', authenticate, AuthController.getMe);
 router.put('/profile', authenticate, validate(updateProfileSchema), AuthController.updateProfile);
 router.post(
   '/change-password',
+  passwordChangeLimiter,
   authenticate,
   validate(changePasswordSchema),
   AuthController.changePassword

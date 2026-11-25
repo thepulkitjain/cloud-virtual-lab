@@ -348,4 +348,56 @@ describe('Phase 9C: Redis Integration & Distributed Security Tests', () => {
       expect(res.body.redis).toHaveProperty('connected');
     });
   });
+
+  // ============================================================================
+  // MODULE 6: Phase 9F.1 Storage & Password-Change Rate-Limit Hardening
+  // ============================================================================
+  describe('6. Phase 9F.1: Storage & Password-Change Rate-Limit Enforcement', () => {
+    it('enforces 429 rate limit on storage upload/download and password-change endpoints', async () => {
+      const app = createApp();
+      const prevOverride = process.env.TEST_RATE_LIMIT_MAX;
+      process.env.TEST_RATE_LIMIT_MAX = '2';
+
+      try {
+        const user = await prisma.user.findFirst({ where: { status: UserStatus.ACTIVE } });
+        expect(user).toBeDefined();
+        const token = signToken({ userId: user!.id, email: user!.email, role: user!.role });
+        const cookie = `${AUTH_COOKIE_NAME}=${token}`;
+
+        // Storage upload/download limiter check (3rd authenticated request should return 429)
+        const s1 = await request(app)
+          .get('/api/v1/storage/files/00000000-0000-0000-0000-000000000000/download')
+          .set('Cookie', cookie);
+        const s2 = await request(app)
+          .get('/api/v1/storage/files/00000000-0000-0000-0000-000000000000/download')
+          .set('Cookie', cookie);
+        const s3 = await request(app)
+          .post('/api/v1/storage/files/upload')
+          .set('Cookie', cookie);
+
+        expect(s1.status).not.toBe(429);
+        expect(s2.status).not.toBe(429);
+        expect(s3.status).toBe(429);
+        expect(s3.body.success).toBe(false);
+        expect(s3.body.message).toContain('Too many storage transfer requests');
+
+        // Password-change limiter check (3rd request should return 429)
+        const p1 = await request(app).post('/api/v1/auth/change-password').send({});
+        const p2 = await request(app).post('/api/v1/auth/change-password').send({});
+        const p3 = await request(app).post('/api/v1/auth/change-password').send({});
+
+        expect(p1.status).toBe(401);
+        expect(p2.status).toBe(401);
+        expect(p3.status).toBe(429);
+        expect(p3.body.success).toBe(false);
+        expect(p3.body.message).toContain('Too many password change attempts');
+      } finally {
+        if (prevOverride === undefined) {
+          delete process.env.TEST_RATE_LIMIT_MAX;
+        } else {
+          process.env.TEST_RATE_LIMIT_MAX = prevOverride;
+        }
+      }
+    });
+  });
 });

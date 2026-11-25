@@ -7,6 +7,9 @@ import { LinuxSimulator } from '../services/simulators/linux.simulator';
 import { NetworkingSimulator } from '../services/simulators/networking.simulator';
 import { ProgrammingSimulator } from '../services/simulators/programming.simulator';
 import { DatabaseSimulator } from '../services/simulators/database.simulator';
+import { LabSimulatorService } from '../services/lab-simulator.service';
+import { redisService } from '../services/redis/redis.service';
+import RedisMock from 'ioredis-mock';
 
 const app = createApp();
 
@@ -844,6 +847,132 @@ describe('Module 2: Virtual Laboratory Management Tests', () => {
           language: 'python',
         });
       expect(hugeRes.status).toBe(400);
+    });
+  });
+
+  describe('11. Phase 9F.1: Redis Simulator State Persistence, TTL, Fallback & Cleanup', () => {
+    it('persists Linux VFS and SQL state in Redis across in-memory restarts', async () => {
+      const mockRedis = new RedisMock();
+      redisService.setClient(mockRedis);
+
+      try {
+        const linuxSessId = 'redis-vfs-sess-1';
+        const dbSessId = 'redis-db-sess-1';
+
+        // Mutate Linux VFS and persist to Redis
+        await LabSimulatorService.execute(linuxSessId, 'LINUX', 'mkdir project_alpha');
+        await LabSimulatorService.execute(linuxSessId, 'LINUX', 'cd project_alpha');
+        await LabSimulatorService.execute(linuxSessId, 'LINUX', 'touch notes.txt');
+        await LabSimulatorService.execute(linuxSessId, 'LINUX', 'cd ..');
+
+        // Simulate process restart by clearing local in-memory map
+        LabSimulatorService.clearInMemoryStore();
+        expect(LabSimulatorService.hasInMemoryState(linuxSessId)).toBe(false);
+
+        // Verify Linux VFS state is restored from Redis (both ls and tabComplete)
+        const lsRes = await LabSimulatorService.execute(linuxSessId, 'LINUX', 'ls project_alpha');
+        expect(lsRes.output).toContain('notes.txt');
+
+        const tabRes = await LabSimulatorService.tabComplete(linuxSessId, 'LINUX', 'ls project_alpha/no');
+        expect(tabRes.completedLine).toBe('ls project_alpha/notes.txt ');
+
+        // Mutate SQL state and persist to Redis
+        await LabSimulatorService.execute(
+          dbSessId,
+          'DATABASE',
+          "INSERT INTO students (name, email, gpa, department) VALUES ('Zoe', 'zoe@edu', 3.9, 'CS');"
+        );
+        LabSimulatorService.clearInMemoryStore();
+
+        const sqlRes = await LabSimulatorService.execute(dbSessId, 'DATABASE', 'SELECT * FROM students;');
+        expect(sqlRes.output).toContain('David Miller');
+        expect(sqlRes.output).toContain('(4 rows)');
+      } finally {
+        await mockRedis.flushall();
+        redisService.resetClient();
+        LabSimulatorService.clearInMemoryStore();
+      }
+    });
+
+    it('falls back to in-memory store when Redis is unavailable and respects TTL expiration', async () => {
+      redisService.resetClient();
+      LabSimulatorService.clearInMemoryStore();
+
+      const sessId = 'fallback-ttl-sess';
+      await LabSimulatorService.execute(sessId, 'LINUX', 'mkdir fallback_dir', undefined, undefined, 1);
+      expect(LabSimulatorService.hasInMemoryState(sessId)).toBe(true);
+
+      const lsBeforeExpire = await LabSimulatorService.execute(
+        sessId,
+        'LINUX',
+        'ls',
+        undefined,
+        undefined,
+        1
+      );
+      expect(lsBeforeExpire.output).toContain('fallback_dir');
+
+      // Wait for 1-second TTL to expire in-memory fallback
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      expect(LabSimulatorService.hasInMemoryState(sessId)).toBe(false);
+
+      const lsAfterExpire = await LabSimulatorService.execute(sessId, 'LINUX', 'ls');
+      expect(lsAfterExpire.output).not.toContain('fallback_dir');
+      LabSimulatorService.clearInMemoryStore();
+    });
+
+    it('cleans up simulator state on endSession without affecting another student session', async () => {
+      const mockRedis = new RedisMock();
+      redisService.setClient(mockRedis);
+
+      try {
+        // Student A starts a session and mutates VFS
+        const sessARes = await request(app)
+          .post(`/api/v1/labs/${linuxLabId}/sessions`)
+          .set('Cookie', studentCookie);
+        const sessAId = sessARes.body.data.session.id;
+
+        // Student B starts an independent session and mutates VFS
+        const sessBRes = await request(app)
+          .post(`/api/v1/labs/${linuxLabId}/sessions`)
+          .set('Cookie', otherStudentCookie);
+        const sessBId = sessBRes.body.data.session.id;
+
+        await request(app)
+          .post(`/api/v1/labs/sessions/${sessAId}/execute`)
+          .set('Cookie', studentCookie)
+          .send({ command: 'mkdir student_a_dir' });
+
+        await request(app)
+          .post(`/api/v1/labs/sessions/${sessBId}/execute`)
+          .set('Cookie', otherStudentCookie)
+          .send({ command: 'mkdir student_b_dir' });
+
+        expect(await redisService.exists(`sim:session:${sessAId}`)).toBe(true);
+        expect(await redisService.exists(`sim:session:${sessBId}`)).toBe(true);
+
+        // Student A ends their session
+        const endARes = await request(app)
+          .post(`/api/v1/labs/sessions/${sessAId}/end`)
+          .set('Cookie', studentCookie);
+        expect(endARes.status).toBe(200);
+
+        // Student A's Redis & in-memory state are cleaned up; Student B's state remains intact
+        expect(await redisService.exists(`sim:session:${sessAId}`)).toBe(false);
+        expect(LabSimulatorService.hasInMemoryState(sessAId)).toBe(false);
+        expect(await redisService.exists(`sim:session:${sessBId}`)).toBe(true);
+
+        const verifyBRes = await request(app)
+          .post(`/api/v1/labs/sessions/${sessBId}/execute`)
+          .set('Cookie', otherStudentCookie)
+          .send({ command: 'ls' });
+        expect(verifyBRes.status).toBe(200);
+        expect(verifyBRes.body.data.output).toContain('student_b_dir');
+      } finally {
+        await mockRedis.flushall();
+        redisService.resetClient();
+        LabSimulatorService.clearInMemoryStore();
+      }
     });
   });
 });

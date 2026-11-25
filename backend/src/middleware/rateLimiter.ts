@@ -138,3 +138,32 @@ export const authLimiter = createDistributedRateLimiter({
   prefix: 'auth',
   message: 'Too many authentication attempts from this IP. Please try again after 15 minutes.',
 });
+
+const getTestAwareMax = (prodDefault: number) => () => {
+  if (process.env.NODE_ENV === 'test') {
+    const override = parseInt(process.env.TEST_RATE_LIMIT_MAX || '', 10);
+    if (Number.isFinite(override) && override > 0) return override;
+    return 1000;
+  }
+  return prodDefault;
+};
+
+/**
+ * Distributed rate limiter for encrypted storage upload/download operations
+ */
+export const storageLimiter = createDistributedRateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: getTestAwareMax(120),
+  prefix: 'storage',
+  message: 'Too many storage transfer requests from this IP. Please try again after 15 minutes.',
+});
+
+/**
+ * Distributed rate limiter for password change attempts
+ */
+export const passwordChangeLimiter = createDistributedRateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: getTestAwareMax(10),
+  prefix: 'password-change',
+  message: 'Too many password change attempts from this IP. Please try again after 15 minutes.',
+});

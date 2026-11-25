@@ -3,6 +3,7 @@ import { StorageController } from '../controllers/storage.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { uploadMiddleware } from '../middleware/upload.middleware';
 import { validate } from '../middleware/validate.middleware';
+import { storageLimiter } from '../middleware/rateLimiter';
 import {
   createFolderSchema,
   renameFolderSchema,
@@ -28,10 +29,10 @@ router.put('/folders/:id', validate(renameFolderSchema), StorageController.renam
 router.delete('/folders/:id', StorageController.deleteFolder);
 
 // 3. File Operations
-router.post('/files/upload', uploadMiddleware.single('file'), StorageController.upload);
+router.post('/files/upload', storageLimiter, uploadMiddleware.single('file'), StorageController.upload);
 router.get('/files', StorageController.listFiles);
 router.get('/files/:id', StorageController.getFile);
-router.get('/files/:id/download', StorageController.download);
+router.get('/files/:id/download', storageLimiter, StorageController.download);
 router.patch('/files/:id', validate(renameFileSchema), StorageController.renameFile);
 router.put('/files/:id', validate(renameFileSchema), StorageController.renameFile);
 router.patch('/files/:id/move', validate(moveFileSchema), StorageController.moveFile);
